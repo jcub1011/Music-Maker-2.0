@@ -1,5 +1,6 @@
 import os
 from os.path import pathsep
+from typing import List
 
 import appdirs
 import json
@@ -8,6 +9,7 @@ class DataHandler:
     application_name = "Music Maker"
     author = "Jocwae"
     file_name = "preferences.json"
+    cache_name = "cache.json"
 
     # Identifiers
     folder_key = "FOLDER"
@@ -40,6 +42,29 @@ class DataHandler:
             return {}
 
     @classmethod
+    def get_cache_path(cls) -> str:
+        return (os.path.join(
+                appdirs.user_cache_dir(cls.application_name, cls.author),
+                cls.cache_name))
+
+    @classmethod
+    def get_cache_file_info(cls) -> dict:
+        """Gets the json in the configuration file."""
+        path = cls.get_cache_path()
+
+        try:
+            if not os.path.exists(path):
+                print(f"No cache file exists at '{path}'.")
+                return {}
+            else:
+                with open(path, "r") as file:
+                    print(f"Found cache file at '{path}'")
+                    return json.load(file)
+        except json.JSONDecodeError:
+            print("Unable to parse cache file.")
+            return {}
+
+    @classmethod
     def update_config_file(cls, key: str, value):
         """Updates or adds a value in the configuration file."""
         path = cls.get_file_path()
@@ -55,6 +80,28 @@ class DataHandler:
         """Retrieves information from the configuration file.
         Returns None if the key does not exist."""
         file_info = cls.get_config_file_info()
+
+        if key not in file_info:
+            return None
+        else:
+            return file_info[key]
+
+    @classmethod
+    def update_cache_file(cls, key: str, value):
+        """Adds or updates the value in the cache file."""
+        path = cls.get_cache_path()
+
+        existing_json = cls.get_cache_file_info()
+        existing_json[key] = value
+
+        with open(path, "w") as file:
+            json.dump(existing_json, file)
+
+    @classmethod
+    def retrieve_cache_file_info(cls, key: str):
+        """Retrieves information from the cache file.
+        Returns None if the key does not exist."""
+        file_info = cls.get_cache_file_info()
 
         if key not in file_info:
             return None
