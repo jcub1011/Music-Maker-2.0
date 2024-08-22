@@ -1,7 +1,9 @@
 from typing import List
 
+import PyQt6
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QListWidget
+    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QListWidget, QListView, QAbstractItemView
+
 from CustomWidgets import LabeledSpinbox, ErrorDialog, LabeledCheckbox
 import pytube
 
@@ -9,8 +11,6 @@ import pytube
 class StreamViewer(QWidget):
     def __init__(self):
         super(StreamViewer, self).__init__()
-
-        self.video_list = []
 
         self.on_cancel_callback = []
         self.on_start_downloads_callback = []
@@ -25,8 +25,12 @@ class StreamViewer(QWidget):
         self.begin_btn.clicked.connect(self.on_start_downloads)
 
         self.audio_only_toggle = LabeledCheckbox("Audio Only?", True)
+        self.select_toggle = QPushButton("Toggle Select")
+        self.select_toggle.clicked.connect(self.toggle_select)
 
         self.stream_list_view = QListWidget()
+        self.stream_list_view.setSelectionMode(PyQt6.QtWidgets.QAbstractItemView.SelectionMode.MultiSelection)
+        self.stream_id_youtube_map = {}
 
         # Layout
         column_2 = QVBoxLayout()
@@ -38,6 +42,7 @@ class StreamViewer(QWidget):
         row_1 = QHBoxLayout()
         row_1.addWidget(QLabel("To Download"))
         row_1.addWidget(self.audio_only_toggle)
+        row_1.addWidget(self.select_toggle)
         row_1_widget = QWidget()
         row_1_widget.setLayout(row_1)
 
@@ -73,11 +78,24 @@ class StreamViewer(QWidget):
 
     def set_video_list(self, videos: List[pytube.YouTube]):
         print("Setting url list.")
-        self.video_list = []
+        self.stream_id_youtube_map = {}
         self.stream_list_view.clear()
 
+        video_count = 1
         for video in videos:
             print(f"Adding {video.title} to list.")
-            self.video_list.append(video)
-            label = QLabel(f"{video.title} - {video.author}")
-            self.stream_list_view.addItem(label)
+            self.stream_id_youtube_map[video_count] = video
+            self.stream_list_view.addItem(f"{video_count}. {video.title} - {video.author}")
+            video_count += 1
+
+        self.stream_list_view.selectAll()
+
+    def toggle_select(self):
+        print("Toggling select.")
+
+        if len(self.stream_list_view.selectedItems()) > 0:
+            print("Removing selections.")
+            self.stream_list_view.clearSelection()
+        else:
+            self.stream_list_view.selectAll()
+
