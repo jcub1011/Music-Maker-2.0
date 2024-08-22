@@ -31,7 +31,7 @@ class MainWindow(QMainWindow):
         print("Opening stream viewer.")
         self.setWindowTitle("Music Maker 2.0 - Stream Viewer")
         self.central_widget.setCurrentWidget(self.stream_viewer)
-        self.stream_viewer.set_url_list(urls)
+        self.stream_viewer.set_video_list(urls)
 
     def open_home(self):
         self.setWindowTitle("Music Maker 2.0 - Home")
@@ -136,9 +136,8 @@ class HomeWindow(QWidget):
             print("Link is not a playlist.")
 
             try:
-                pytube.YouTube(self.urlInput.text()).check_availability()
-                print("Valid video link.")
-
+                length = pytube.YouTube(self.urlInput.text()).length
+                print(f"Valid video link. {length}s")
             except:
                 return "Invalid video link. (Link may be mistyped, the video may be private or otherwise unavailable.)"
 
@@ -158,9 +157,14 @@ class HomeWindow(QWidget):
 
     def raise_get_streams_callback(self):
         try:
-            videos = pytube.Playlist(self.urlInput.text()).video_urls
+            playlist = pytube.Playlist(self.urlInput.text())
+            print(playlist.playlist_id)
+            videos = playlist.videos
         except KeyError:
-            videos = [self.urlInput.text()]
+            videos = [pytube.YouTube(self.urlInput.text())]
+        except:
+            print(f"Unable to get video or playlist from url '{self.urlInput.text()}'.")
+            return
 
         for callback in self.on_get_streams_callbacks:
             callback(videos)

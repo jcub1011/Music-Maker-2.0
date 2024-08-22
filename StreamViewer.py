@@ -10,7 +10,7 @@ class StreamViewer(QWidget):
     def __init__(self):
         super(StreamViewer, self).__init__()
 
-        self.url_list = []
+        self.video_list = []
 
         self.on_cancel_callback = []
         self.on_start_downloads_callback = []
@@ -71,6 +71,13 @@ class StreamViewer(QWidget):
         for callback in self.on_start_downloads_callback:
             callback([], self.audio_only_toggle.get_value())
 
-    def set_url_list(self, urls: List[str]):
+    def set_video_list(self, videos: List[pytube.YouTube]):
         print("Setting url list.")
-        self.url_list = urls
+        self.video_list = []
+        self.stream_list_view.clear()
+
+        for video in videos:
+            print(f"Adding {video.title} to list.")
+            self.video_list.append(video)
+            label = QLabel(f"{video.title} - {video.author}")
+            self.stream_list_view.addItem(label)
