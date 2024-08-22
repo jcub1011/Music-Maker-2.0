@@ -2,7 +2,7 @@ import sys
 import typing
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox
+    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox
 
 
 class LabeledSpinbox(QWidget):
@@ -64,3 +64,20 @@ class ErrorDialog(QDialog):
         self.layout.addWidget(close_btn)
 
         self.setLayout(self.layout)
+
+
+class LabeledCheckbox(QWidget):
+    def __init__(self, text: str, default_state: bool = False):
+        super(LabeledCheckbox, self).__init__()
+
+        self.label = QLabel(text)
+        self.check_box = QCheckBox()
+        self.check_box.setChecked(default_state)
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.label)
+        layout.addWidget(self.check_box)
+        self.setLayout(layout)
+
+    def get_value(self) -> bool:
+        return self.check_box.isChecked()

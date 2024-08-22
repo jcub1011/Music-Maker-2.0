@@ -1,18 +1,48 @@
 from os import path
+from typing import List
 
 import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget
+    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget
 
 from CustomWidgets import LabeledSpinbox, ErrorDialog
+from StreamViewer import StreamViewer
 
 
-class HomeWindow(QMainWindow):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Music Maker 2.0 - Home")
+        self.setWindowTitle("Music Maker 2.0")
         self.setMinimumWidth(500)
+
+        self.central_widget = QStackedWidget()
+        self.setCentralWidget(self.central_widget)
+        self.home = HomeWindow()
+        self.stream_viewer = StreamViewer()
+        self.stream_viewer.add_on_cancel_callback(self.open_home)
+        self.home.add_get_streams_callback(self.open_stream_viewer)
+        self.central_widget.addWidget(self.home)
+        self.central_widget.addWidget(self.stream_viewer)
+
+        self.open_home()
+
+    def open_stream_viewer(self, urls: List[str]):
+        print("Opening stream viewer.")
+        self.setWindowTitle("Music Maker 2.0 - Stream Viewer")
+        self.central_widget.setCurrentWidget(self.stream_viewer)
+        self.stream_viewer.set_url_list(urls)
+
+    def open_home(self):
+        self.setWindowTitle("Music Maker 2.0 - Home")
+        self.central_widget.setCurrentWidget(self.home)
+
+
+class HomeWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.on_get_streams_callbacks = []
 
         # Start button.
         self.getStreamsButton = QPushButton("Get Streams")
@@ -57,9 +87,7 @@ class HomeWindow(QMainWindow):
         footer_h_box_widget.setLayout(footer_h_box)
         v_box.addWidget(footer_h_box_widget)
 
-        v_box_widget = QWidget()
-        v_box_widget.setLayout(v_box)
-        self.setCentralWidget(v_box_widget)
+        self.setLayout(v_box)
 
     def get_streams(self):
         """Opens the streams window."""
@@ -72,6 +100,7 @@ class HomeWindow(QMainWindow):
             return
 
         print("Getting streams.")
+        self.raise_get_streams_callback()
 
     def select_folder(self):
         """Prompts the user to select a folder."""
@@ -121,3 +150,17 @@ class HomeWindow(QMainWindow):
 
         # Completed checks.
         return ""
+
+    def add_get_streams_callback(self, callback):
+        """Callback requires a List[str] parameter."""
+
+        self.on_get_streams_callbacks.append(callback)
+
+    def raise_get_streams_callback(self):
+        try:
+            videos = pytube.Playlist(self.urlInput.text()).video_urls
+        except KeyError:
+            videos = [self.urlInput.text()]
+
+        for callback in self.on_get_streams_callbacks:
+            callback(videos)
