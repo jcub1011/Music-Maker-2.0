@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLin
 
 from CustomWidgets import LabeledSpinbox, ErrorDialog, LabeledCheckbox
 import pytube
+import threading
 
 
 class StreamViewer(QWidget):
@@ -14,6 +15,8 @@ class StreamViewer(QWidget):
 
         self.on_cancel_callback = []
         self.on_start_downloads_callback = []
+        self.video_list_gen_thread = None
+        self.stop_video_list_generation_event = threading.Event()
 
         # Buttons
         self.cancel_btn = QPushButton("Return To Home")
@@ -68,6 +71,7 @@ class StreamViewer(QWidget):
 
     def on_cancel(self):
         print("Returning to home.")
+        self.stop_video_list_generation_event.set()
         for callback in self.on_cancel_callback:
             callback()
 
@@ -78,17 +82,30 @@ class StreamViewer(QWidget):
 
     def set_video_list(self, videos: List[pytube.YouTube]):
         print("Setting url list.")
+        self.stop_video_list_generation_event.clear()
+        self.video_list_gen_thread = threading.Thread(target=self.populate_video_list, args=(videos,))
+        self.video_list_gen_thread.daemon = True
+        self.video_list_gen_thread.start()
+
+
+
+    def populate_video_list(self, videos: List[pytube.YouTube]):
+        print("Beginning population.")
         self.stream_id_youtube_map = {}
         self.stream_list_view.clear()
 
         video_count = 1
         for video in videos:
+            if self.stop_video_list_generation_event.is_set():
+                print("Stopping video retrieval.")
+                return
             print(f"Adding {video.title} to list.")
             self.stream_id_youtube_map[video_count] = video
             self.stream_list_view.addItem(f"{video_count}. {video.title} - {video.author}")
             video_count += 1
 
         self.stream_list_view.selectAll()
+
 
     def toggle_select(self):
         print("Toggling select.")
