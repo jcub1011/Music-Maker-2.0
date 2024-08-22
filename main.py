@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtWidgets import QApplication
+
 from HomeWindow import HomeWindow
 
 if __name__ == "__main__":

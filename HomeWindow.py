@@ -1,8 +1,10 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget
-from CustomWidgets import LabeledSpinbox, ErrorDialog
-from PyQt6.QtCore import QSize, Qt
 from os import path
+
+import pytube
+from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
+    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget
+
+from CustomWidgets import LabeledSpinbox, ErrorDialog
 
 
 class HomeWindow(QMainWindow):
@@ -65,7 +67,7 @@ class HomeWindow(QMainWindow):
 
         err_msg = self.validate_inputs()
         if err_msg is not None and err_msg != "":
-            print("Unable to get streams.")
+            print(f"Unable to get streams.\n{err_msg}")
             ErrorDialog("Error", err_msg).exec()
             return
 
@@ -91,10 +93,31 @@ class HomeWindow(QMainWindow):
     def validate_inputs(self) -> str:
         """Returns an error message if any of the inputs are invalid, otherwise it is an empty string."""
 
+        # Check if folder exists.
         if not path.exists(self.selectedFolder.text()):
-            print(f"Invalid folder path '{self.selectedFolder.text()}'.")
             return f"Invalid folder path '{self.selectedFolder.text()}'."
 
+        print("Completed folder validation.")
 
+        # Check if video/playlist exists.
+        try:
+            print(f"Playlist ID: {pytube.Playlist(self.urlInput.text()).playlist_id}")
 
+        except KeyError:
+            print("Link is not a playlist.")
+
+            try:
+                pytube.YouTube(self.urlInput.text()).check_availability()
+                print("Valid video link.")
+
+            except:
+                return "Invalid video link. (Link may be mistyped, the video may be private or otherwise unavailable.)"
+
+        except:
+            return "Unknown error."
+
+        finally:
+            print("Completed link validation.")
+
+        # Completed checks.
         return ""
