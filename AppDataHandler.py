@@ -9,6 +9,13 @@ class DataHandler:
     author = "Jocwae"
     file_name = "preferences.json"
 
+    # Identifiers
+    folder_key = "FOLDER"
+    url_key = "URL"
+    sim_download_key = "SIMULTANEOUS_DOWNLOADS"
+    sim_process_key = "SIMULTANEOUS_DOWNLOADS"
+
+
     @classmethod
     def get_file_path(cls) -> str:
         return (os.path.join(
@@ -16,7 +23,7 @@ class DataHandler:
                 cls.file_name))
 
     @classmethod
-    def get_config_file(cls) -> dict:
+    def get_config_file_info(cls) -> dict:
         """Gets the json in the configuration file."""
         path = cls.get_file_path()
 
@@ -33,20 +40,23 @@ class DataHandler:
             return {}
 
     @classmethod
-    def update_config_file(cls, key: str, value: str):
+    def update_config_file(cls, key: str, value):
         """Updates or adds a value in the configuration file."""
         path = cls.get_file_path()
 
-        existing_json = cls.get_config_file()
+        existing_json = cls.get_config_file_info()
         existing_json[key] = value
 
         with open(path, "w") as file:
             json.dump(existing_json, file)
 
     @classmethod
-    def set_default_url(cls, url: str):
-        cls.update_config_file("URL", url)
+    def retrieve_config_file_info(cls, key: str):
+        """Retrieves information from the configuration file.
+        Returns None if the key does not exist."""
+        file_info = cls.get_config_file_info()
 
-    @classmethod
-    def set_output_folder(cls, path: str):
-        cls.update_config_file("FOLDER", path)
+        if key not in file_info:
+            return None
+        else:
+            return file_info[key]
