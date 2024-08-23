@@ -32,6 +32,7 @@ class StreamViewer(QWidget):
 
         self.begin_btn = QPushButton("Start Downloading")
         self.begin_btn.setStyleSheet("padding: 5px")
+        self.begin_btn.setEnabled(False)
         self.begin_btn.clicked.connect(self.on_start_downloads)
 
         self.audio_only_toggle = LabeledCheckbox("Audio Only?", True)
@@ -113,6 +114,7 @@ class StreamViewer(QWidget):
 
     def set_video_list(self, videos: List[pytube.YouTube]):
         print("Setting url list.")
+        self.begin_btn.setEnabled(False)
 
         while not self.video_queue.empty():
             self.video_queue.get()
@@ -137,6 +139,7 @@ class StreamViewer(QWidget):
             print("Received stop message.")
             if message["Stop Message"] == "Finished":
                 self.stream_list_view.selectAll()
+                self.begin_btn.setEnabled(True)
             return
 
         self.stream_id_youtube_map[message["ID"]] = message["YouTube"]
