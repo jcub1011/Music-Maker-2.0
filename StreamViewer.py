@@ -8,6 +8,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, \
     QProgressBar
 
+import AppDataHandler
 from CustomWidgets import LabeledCheckbox
 
 
@@ -34,6 +35,15 @@ class StreamViewer(QWidget):
         self.begin_btn.clicked.connect(self.on_start_downloads)
 
         self.audio_only_toggle = LabeledCheckbox("Audio Only?", True)
+        audio_only_initial_state = AppDataHandler.DataHandler.get_config_file_info()[AppDataHandler.DataHandler.audio_only_key]
+        if audio_only_initial_state is not None:
+            self.audio_only_toggle.check_box.setChecked(audio_only_initial_state)
+
+        self.audio_only_toggle.check_box.stateChanged.connect( lambda:
+            AppDataHandler.DataHandler.update_config_file(
+                AppDataHandler.DataHandler.audio_only_key,
+                self.audio_only_toggle.check_box.isChecked()))
+
         self.select_toggle = QPushButton("Toggle Select")
         self.select_toggle.clicked.connect(self.toggle_select)
 
@@ -125,7 +135,7 @@ class StreamViewer(QWidget):
         if "Stop Message" in message.keys():
             # perform cleanup
             print("Received stop message.")
-            if message["Stop Message"] is "Finished":
+            if message["Stop Message"] == "Finished":
                 self.stream_list_view.selectAll()
             return
 

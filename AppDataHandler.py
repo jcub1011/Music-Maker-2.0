@@ -13,7 +13,16 @@ class DataHandler:
     folder_key = "FOLDER"
     url_key = "URL"
     sim_download_key = "SIMULTANEOUS_DOWNLOADS"
-    sim_process_key = "SIMULTANEOUS_DOWNLOADS"
+    sim_process_key = "SIMULTANEOUS_PROCESSES"
+    audio_only_key = "AUDIO_ONLY"
+
+    default_application_settings = {
+        url_key: "",
+        folder_key: "",
+        sim_download_key: 1,
+        sim_process_key: 1,
+        audio_only_key: True
+    }
 
 
     @classmethod
@@ -30,14 +39,14 @@ class DataHandler:
         try:
             if not os.path.exists(path):
                 print(f"No config file exists at '{path}'.")
-                return {}
+                return cls.default_application_settings
             else:
                 with open(path, "r") as file:
                     print(f"Found config file at '{path}'")
                     return json.load(file)
         except json.JSONDecodeError:
             print("Unable to parse config file.")
-            return {}
+            return cls.default_application_settings
 
     @classmethod
     def get_cache_path(cls) -> str:
@@ -69,6 +78,11 @@ class DataHandler:
 
         existing_json = cls.get_config_file_info()
         existing_json[key] = value
+
+        if not os.path.exists(path):
+            os.makedirs(appdirs.user_data_dir(cls.application_name, cls.author), exist_ok=True)
+            with open(path, "w") as file:
+                file.write("{}")
 
         with open(path, "w") as file:
             json.dump(existing_json, file)

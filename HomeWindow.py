@@ -5,8 +5,10 @@ import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
     QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget
 
+import AppDataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
 from StreamViewer import StreamViewer
+from AppDataHandler import DataHandler
 
 
 class MainWindow(QMainWindow):
@@ -52,11 +54,13 @@ class HomeWindow(QWidget):
         # URL input field.
         self.urlInputLabel = QLabel("YouTube Link (Playlist or Video Link)")
         self.urlInput = QLineEdit(self)
+        self.urlInput.setPlaceholderText("Insert a YouTube playlist/video link here.")
 
         # Folder input field.
         self.selectedFolderLabel = QLabel("Selected Folder")
         self.selectedFolder = QLineEdit(self)
         self.selectedFolder.setReadOnly(True)
+        self.selectedFolder.setPlaceholderText("Select a folder.")
         self.selectedFolder.setText("No folder selected")
         self.selectFolderButton = QPushButton("Select Output Folder")
         self.selectFolderButton.setStyleSheet("padding: 5px")
@@ -89,6 +93,13 @@ class HomeWindow(QWidget):
 
         self.setLayout(v_box)
 
+        # Apply preferences.
+        preferences = DataHandler.get_config_file_info()
+        self.urlInput.setText(preferences[DataHandler.url_key])
+        self.selectedFolder.setText(preferences[DataHandler.folder_key])
+        self.simultaneousDownloads.set_value(preferences[DataHandler.sim_download_key])
+        self.simultaneousProcesses.set_value(preferences[DataHandler.sim_process_key])
+
     def get_streams(self):
         """Opens the streams window."""
         print("Validating inputs.")
@@ -98,6 +109,12 @@ class HomeWindow(QWidget):
             print(f"Unable to get streams.\n{err_msg}")
             ErrorDialog("Error", err_msg).exec()
             return
+
+        print("Updating user settings.")
+        DataHandler.update_config_file(DataHandler.url_key, self.urlInput.text())
+        DataHandler.update_config_file(DataHandler.folder_key, self.selectedFolder.text())
+        DataHandler.update_config_file(DataHandler.sim_download_key, self.simultaneousDownloads.get_value())
+        DataHandler.update_config_file(DataHandler.sim_process_key, self.simultaneousProcesses.get_value())
 
         print("Getting streams.")
         self.raise_get_streams_callback()
