@@ -1,5 +1,6 @@
 import typing
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox
 
 

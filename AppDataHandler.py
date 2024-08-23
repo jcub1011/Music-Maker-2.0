@@ -15,13 +15,15 @@ class DataHandler:
     sim_download_key = "SIMULTANEOUS_DOWNLOADS"
     sim_process_key = "SIMULTANEOUS_PROCESSES"
     audio_only_key = "AUDIO_ONLY"
+    stream_limit_key = "STREAM_LIMIT"
 
     default_application_settings = {
         url_key: "",
         folder_key: "",
         sim_download_key: 1,
         sim_process_key: 1,
-        audio_only_key: True
+        audio_only_key: True,
+        stream_limit_key: 0
     }
 
 

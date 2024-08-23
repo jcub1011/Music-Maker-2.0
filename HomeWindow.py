@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Music Maker 2.0")
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(550)
 
         self.central_widget = QStackedWidget()
         self.setCentralWidget(self.central_widget)
@@ -67,8 +67,9 @@ class HomeWindow(QWidget):
         self.selectFolderButton.clicked.connect(self.select_folder)
 
         # Footer selectors.
-        self.simultaneousDownloads = LabeledSpinbox("Simultaneous Downloads")
-        self.simultaneousProcesses = LabeledSpinbox("Simultaneous Processes")
+        self.simultaneousDownloads = LabeledSpinbox("Simultaneous\nDownloads")
+        self.simultaneousProcesses = LabeledSpinbox("Simultaneous\nProcesses")
+        self.max_downloads = LabeledSpinbox("Max Downloads\n(0 = unlimited)", 0)
 
         # Layout
         v_box = QVBoxLayout(self)
@@ -86,6 +87,7 @@ class HomeWindow(QWidget):
         footer_h_box = QHBoxLayout(self)
         footer_h_box.addWidget(self.simultaneousDownloads)
         footer_h_box.addWidget(self.simultaneousProcesses)
+        footer_h_box.addWidget(self.max_downloads)
         footer_h_box.addWidget(self.getStreamsButton)
         footer_h_box_widget = QWidget()
         footer_h_box_widget.setLayout(footer_h_box)
@@ -99,6 +101,7 @@ class HomeWindow(QWidget):
         self.selectedFolder.setText(preferences[DataHandler.folder_key])
         self.simultaneousDownloads.set_value(preferences[DataHandler.sim_download_key])
         self.simultaneousProcesses.set_value(preferences[DataHandler.sim_process_key])
+        self.max_downloads.set_value(preferences[DataHandler.stream_limit_key])
 
     def get_streams(self):
         """Opens the streams window."""
@@ -115,6 +118,7 @@ class HomeWindow(QWidget):
         DataHandler.update_config_file(DataHandler.folder_key, self.selectedFolder.text())
         DataHandler.update_config_file(DataHandler.sim_download_key, self.simultaneousDownloads.get_value())
         DataHandler.update_config_file(DataHandler.sim_process_key, self.simultaneousProcesses.get_value())
+        DataHandler.update_config_file(DataHandler.stream_limit_key, self.max_downloads.get_value())
 
         print("Getting streams.")
         self.raise_get_streams_callback()
@@ -182,6 +186,10 @@ class HomeWindow(QWidget):
         except:
             print(f"Unable to get video or playlist from url '{self.urlInput.text()}'.")
             return
+
+        # Truncate list.
+        if self.max_downloads.get_value() > 0:
+            videos = videos[:self.max_downloads.get_value()]
 
         for callback in self.on_get_streams_callbacks:
             callback(videos)
