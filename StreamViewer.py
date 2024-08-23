@@ -1,17 +1,14 @@
-import math
-from multiprocessing.queues import Queue
+import queue
+import threading
 from typing import List
 
 import PyQt6
-from PyQt6.QtCore import QRunnable, pyqtSlot, QObject, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QListWidget, QListView, QAbstractItemView, QProgressBar
-from pytube import YouTube
-
-from CustomWidgets import LabeledSpinbox, ErrorDialog, LabeledCheckbox
 import pytube
-import threading
-import queue
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QApplication, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, \
+    QProgressBar
+
+from CustomWidgets import LabeledCheckbox
 
 
 class StreamViewer(QWidget):

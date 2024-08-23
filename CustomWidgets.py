@@ -1,8 +1,6 @@
-import sys
 import typing
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox
 
 
 class LabeledSpinbox(QWidget):

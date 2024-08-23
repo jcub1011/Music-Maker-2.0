@@ -1,6 +1,4 @@
 import os
-from os.path import pathsep
-from typing import List
 
 import appdirs
 import json
