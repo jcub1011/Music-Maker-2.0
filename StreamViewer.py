@@ -125,6 +125,8 @@ class StreamViewer(QWidget):
         if "Stop Message" in message.keys():
             # perform cleanup
             print("Received stop message.")
+            if message["Stop Message"] is "Finished":
+                self.stream_list_view.selectAll()
             return
 
         self.stream_id_youtube_map[message["ID"]] = message["YouTube"]
@@ -141,7 +143,7 @@ class StreamViewer(QWidget):
             if self.stop_video_list_generation_event.is_set():
                 print("Stopping video retrieval.")
                 result_queue.put({
-                    "Stop Message": None
+                    "Stop Message": "Canceled"
                 })
                 return
             print(f"Adding {video.title} to list.")
@@ -160,53 +162,8 @@ class StreamViewer(QWidget):
                 "Progress": int(video_count / total_videos * 100)
             }
             result_queue.put(message)
-
             video_count += 1
 
-        self.stream_list_view.selectAll()
-
-#
-# class VideoListRetriever(QRunnable):
-#     def __init__(self, video_list: List[YouTube]):
-#         super(VideoListRetriever, self).__init__()
-#
-#         self.signals = VideoListRetrieverSignals()
-#         self.video_list = video_list
-#
-#     @pyqtSlot()
-#     def run(self):
-#         video_index = 1
-#         total_videos = len(self.video_list)
-#
-#         for video in self.video_list:
-#             if self.stop_video_list_generation_event.is_set():
-#                 print("Stopping video retrieval.")
-#                 return
-#             print(f"Adding {video.title} to list.")
-#             self.stream_id_youtube_map[video_index] = video
-#             self.stream_list_view.addItem(f"{video_index}. {video.title} - {video.author}")
-#
-#             percent = int(video_index / total_videos * 100)
-#             print(percent)
-#             if self.progress_bar.value() != percent:
-#                 self.progress_bar.setValue(percent)
-#
-#             video_index += 1
-#
-#         self.stream_list_view.selectAll()
-#
-# class VideoListRetrieverSignals(QObject):
-#     """
-#     finished
-#         no data
-#     error
-#         err msg
-#     received_next_YouTube
-#         (YouTube, "(video num). title - author")
-#     progress_updated
-#         integer (0 to 100)
-#     """
-#     finished = pyqtSignal()
-#     error = pyqtSignal(str)
-#     received_next_YouTube = pyqtSignal(tuple)
-#     progress_updated = pyqtSignal(int)
+        result_queue.put({
+            "Stop Message": "Finished"
+        })
