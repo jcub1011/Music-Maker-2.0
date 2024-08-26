@@ -1,5 +1,8 @@
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from pytube import YouTube
 from mutagen.easyid3 import EasyID3
+from typing import NamedTuple
+
 
 class TagHandler:
     # Tag Label Constants
@@ -78,3 +81,25 @@ class TagHandler:
             audio[key] = value
 
         audio.save()
+
+
+class DownloadRequest(NamedTuple):
+    video_number: int
+    video: YouTube
+    audio_only: bool
+    output_path: str
+
+class ProcessRequest(NamedTuple):
+    audio_file_to_process: str
+    video_file_to_process: str
+    output_file: str
+
+class DownloadHandler(QWidget):
+    def _init__(self):
+        super(DownloadHandler, self).__init__()
+
+        top_bar = QHBoxLayout()
+        download_label = QLabel("Downloads")
+        self.stop_button = QPushButton("Stop")
+        top_bar.addWidget(download_label)
+        top_bar.addWidget(self.stop_button)

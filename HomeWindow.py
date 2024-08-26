@@ -4,9 +4,11 @@ from typing import List
 import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
     QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget
+from pytube import YouTube
 
 import AppDataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
+from DownloadHandler import DownloadHandler, DownloadRequest
 from StreamViewer import StreamViewer
 from AppDataHandler import DataHandler
 
@@ -22,22 +24,30 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.home = HomeWindow()
         self.stream_viewer = StreamViewer()
+        self.download_handler = DownloadHandler()
         self.stream_viewer.add_on_cancel_callback(self.open_home)
+        self.stream_viewer.add_on_start_downloads_callback(self.open_downloads)
         self.home.add_get_streams_callback(self.open_stream_viewer)
         self.central_widget.addWidget(self.home)
         self.central_widget.addWidget(self.stream_viewer)
+        self.central_widget.addWidget(self.download_handler)
 
         self.open_home()
 
-    def open_stream_viewer(self, urls: List[str]):
+    def open_stream_viewer(self, urls: List[YouTube], output_path: str):
         print("Opening stream viewer.")
         self.setWindowTitle("Music Maker 2.0 - Stream Viewer")
         self.central_widget.setCurrentWidget(self.stream_viewer)
-        self.stream_viewer.set_video_list(urls)
+        self.stream_viewer.set_video_list(urls, output_path)
 
     def open_home(self):
         self.setWindowTitle("Music Maker 2.0 - Home")
         self.central_widget.setCurrentWidget(self.home)
+
+    def open_downloads(self, download_list: List[DownloadRequest]):
+        print("Opening download viewer.")
+        self.setWindowTitle("Music Maker 2.0 - Download Viewer")
+        self.central_widget.setCurrentWidget(self.download_handler)
 
 
 class HomeWindow(QWidget):
@@ -192,4 +202,4 @@ class HomeWindow(QWidget):
             videos = videos[:self.max_downloads.get_value()]
 
         for callback in self.on_get_streams_callbacks:
-            callback(videos)
+            callback(videos, self.selectedFolder.text())

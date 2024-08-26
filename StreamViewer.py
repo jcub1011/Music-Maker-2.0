@@ -10,12 +10,14 @@ from PyQt6.QtWidgets import QApplication, QPushButton, QLabel, QVBoxLayout, QHBo
 
 import AppDataHandler
 from CustomWidgets import LabeledCheckbox
+from DownloadHandler import DownloadRequest
 
 
 class StreamViewer(QWidget):
     def __init__(self):
         super(StreamViewer, self).__init__()
 
+        self.output_path: str = ""
         self.on_cancel_callback = []
         self.on_start_downloads_callback = []
         self.video_list_gen_thread = None
@@ -100,8 +102,19 @@ class StreamViewer(QWidget):
 
     def on_start_downloads(self):
         print("Beginning downloads.")
+
+        # Create download list.
+        download_list: List[DownloadRequest] = []
+        for selected_item in self.stream_list_view.selectedItems():
+            video_id = int(selected_item.text().split('.', maxsplit = 1)[0])
+            video = self.stream_id_youtube_map[video_id]
+            audio_only = self.audio_only_toggle.get_value()
+            output_path = self.output_path
+
+            download_list.append(DownloadRequest(video_id, video, audio_only, output_path))
+
         for callback in self.on_start_downloads_callback:
-            callback([], self.audio_only_toggle.get_value())
+            callback(download_list)
 
     def toggle_select(self):
         print("Toggling select.")
@@ -112,9 +125,10 @@ class StreamViewer(QWidget):
         else:
             self.stream_list_view.selectAll()
 
-    def set_video_list(self, videos: List[pytube.YouTube]):
+    def set_video_list(self, videos: List[pytube.YouTube], output_path: str):
         print("Setting url list.")
         self.begin_btn.setEnabled(False)
+        self.output_path = output_path
 
         while not self.video_queue.empty():
             self.video_queue.get()
@@ -160,12 +174,6 @@ class StreamViewer(QWidget):
                 })
                 return
             print(f"Adding {video.title} to list.")
-            # self.stream_id_youtube_map[video_count] = video
-            # self.stream_list_view.addItem(f"{video_count}. {video.title} - {video.author}")
-            # percent = int(video_count / total_videos * 100)
-            # print(percent)
-            # if self.progress_bar.value() != percent:
-            #     self.progress_bar.setValue(percent)
 
             message = {
                 "ID": video_count,
