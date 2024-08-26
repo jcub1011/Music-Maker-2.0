@@ -1,6 +1,7 @@
 import queue
 import threading
 from typing import List
+from multiprocessing.pool import ThreadPool
 
 import PyQt6
 import pytube

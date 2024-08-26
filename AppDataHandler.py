@@ -17,7 +17,18 @@ class DataHandler:
     audio_only_key = "AUDIO_ONLY"
     stream_limit_key = "STREAM_LIMIT"
 
-    default_application_settings = {
+    __default_application_settings = {
+        url_key: "",
+        folder_key: "",
+        sim_download_key: 1,
+        sim_process_key: 1,
+        audio_only_key: True,
+        stream_limit_key: 0
+    }
+
+    # Cached data.
+    __cached_data_updated = False
+    __cached_application_settings = {
         url_key: "",
         folder_key: "",
         sim_download_key: 1,
@@ -39,16 +50,24 @@ class DataHandler:
         path = cls.get_file_path()
 
         try:
-            if not os.path.exists(path):
+            if cls.__cached_data_updated:
+                return cls.__cached_application_settings
+
+            elif not os.path.exists(path):
                 print(f"No config file exists at '{path}'.")
-                return cls.default_application_settings
+                return cls.__default_application_settings
+
             else:
                 with open(path, "r") as file:
                     print(f"Found config file at '{path}'")
-                    return json.load(file)
+                    settings = json.load(file)
+                    cls.__cached_application_settings = settings
+                    cls.__cached_data_updated = True
+                    return settings
+
         except json.JSONDecodeError:
             print("Unable to parse config file.")
-            return cls.default_application_settings
+            return cls.__default_application_settings
 
     @classmethod
     def get_cache_path(cls) -> str:
@@ -80,6 +99,8 @@ class DataHandler:
 
         existing_json = cls.get_config_file_info()
         existing_json[key] = value
+        cls.__cached_application_settings = existing_json
+        cls.__cached_data_updated = True
 
         if not os.path.exists(path):
             os.makedirs(appdirs.user_data_dir(cls.application_name, cls.author), exist_ok=True)
