@@ -54,6 +54,7 @@ class HomeWindow(QWidget):
     def __init__(self):
         super().__init__()
 
+        print("Init home window.")
         self.on_get_streams_callbacks = []
 
         # Start button.

@@ -17,6 +17,8 @@ class StreamViewer(QWidget):
     def __init__(self):
         super().__init__()
 
+        print("Init stream viewer.")
+
         self.output_path: str = ""
         self.on_cancel_callback = []
         self.on_start_downloads_callback = []

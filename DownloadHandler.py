@@ -97,10 +97,11 @@ class ProcessRequest(NamedTuple):
 
 
 class DownloadViewer(QWidget):
-    def _init__(self):
+    def __init__(self):
         super(DownloadViewer, self).__init__()
 
-        print("init download handler")
+        print("Init download viewer.")
+
         # Top Bar
         top_bar = QHBoxLayout()
         self.stop_button = QPushButton("Stop")
