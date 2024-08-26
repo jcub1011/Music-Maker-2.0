@@ -168,6 +168,7 @@ class DownloadViewer(QWidget):
         self.threads_finished = 0
         self.total_threads_to_finish = 0
         self.thread_pool: ThreadPoolExecutor = None
+        self.go_back_callback = []
 
         # Top Bar
         top_bar = QHBoxLayout()
@@ -193,6 +194,11 @@ class DownloadViewer(QWidget):
 
     def on_go_back_pressed(self):
         print("Going back.")
+        for callback in self.go_back_callback:
+            callback()
+
+    def register_go_back_callback(self, callback):
+        self.go_back_callback.append(callback)
 
     def set_download_list(self, download_list: List[DownloadRequest]):
         print(f"Setting download list: {len(download_list)} items.")
@@ -230,9 +236,11 @@ class DownloadViewer(QWidget):
                 if self.threads_finished >= self.total_threads_to_finish:
                     self.return_button.setDisabled(False)
                     self.stop_button.setDisabled(True)
-                    self.thread_pool.shutdown()
                     self.message_check_timer.stop()
+
                     print("Shutting down thread pool.")
+                    if self.thread_pool is not None:
+                        self.thread_pool.shutdown()
 
     def download_with_progress(self, ars: DownloadThreadArgs) -> None:
         """

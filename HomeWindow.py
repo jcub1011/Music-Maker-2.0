@@ -27,6 +27,7 @@ class MainWindow(QMainWindow):
         self.stream_viewer.add_on_cancel_callback(self.open_home)
         self.stream_viewer.add_on_start_downloads_callback(self.open_downloads)
         self.home.add_get_streams_callback(self.open_stream_viewer)
+        self.download_viewer.register_go_back_callback(self.return_to_stream_viewer)
         self.central_widget.addWidget(self.home)
         self.central_widget.addWidget(self.stream_viewer)
         self.central_widget.addWidget(self.download_viewer)
@@ -48,6 +49,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Music Maker 2.0 - Download Viewer")
         self.central_widget.setCurrentWidget(self.download_viewer)
         self.download_viewer.set_download_list(download_list)
+
+    def return_to_stream_viewer(self):
+        print("Returning to stream viewer.")
+        self.setWindowTitle("Music Maker 2.0 - Stream Viewer")
+        self.central_widget.setCurrentWidget(self.stream_viewer)
 
 
 class HomeWindow(QWidget):
