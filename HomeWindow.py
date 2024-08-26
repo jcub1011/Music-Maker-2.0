@@ -6,9 +6,8 @@ from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
     QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget
 from pytube import YouTube
 
-import AppDataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
-from DownloadHandler import DownloadHandler, DownloadRequest
+from DownloadHandler import DownloadViewer, DownloadRequest
 from StreamViewer import StreamViewer
 from AppDataHandler import DataHandler
 
@@ -24,13 +23,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.home = HomeWindow()
         self.stream_viewer = StreamViewer()
-        self.download_handler = DownloadHandler()
+        self.download_viewer = DownloadViewer()
         self.stream_viewer.add_on_cancel_callback(self.open_home)
         self.stream_viewer.add_on_start_downloads_callback(self.open_downloads)
         self.home.add_get_streams_callback(self.open_stream_viewer)
         self.central_widget.addWidget(self.home)
         self.central_widget.addWidget(self.stream_viewer)
-        self.central_widget.addWidget(self.download_handler)
+        self.central_widget.addWidget(self.download_viewer)
 
         self.open_home()
 
@@ -47,7 +46,8 @@ class MainWindow(QMainWindow):
     def open_downloads(self, download_list: List[DownloadRequest]):
         print("Opening download viewer.")
         self.setWindowTitle("Music Maker 2.0 - Download Viewer")
-        self.central_widget.setCurrentWidget(self.download_handler)
+        self.central_widget.setCurrentWidget(self.download_viewer)
+        self.download_viewer.set_download_list(download_list)
 
 
 class HomeWindow(QWidget):
@@ -90,18 +90,14 @@ class HomeWindow(QWidget):
         folder_h_box = QHBoxLayout(self)
         folder_h_box.addWidget(self.selectedFolder)
         folder_h_box.addWidget(self.selectFolderButton)
-        select_folder_widget = QWidget()
-        select_folder_widget.setLayout(folder_h_box)
-        v_box.addWidget(select_folder_widget)
+        v_box.addLayout(folder_h_box)
 
         footer_h_box = QHBoxLayout(self)
         footer_h_box.addWidget(self.simultaneousDownloads)
         footer_h_box.addWidget(self.simultaneousProcesses)
         footer_h_box.addWidget(self.max_downloads)
         footer_h_box.addWidget(self.getStreamsButton)
-        footer_h_box_widget = QWidget()
-        footer_h_box_widget.setLayout(footer_h_box)
-        v_box.addWidget(footer_h_box_widget)
+        v_box.addLayout(footer_h_box)
 
         self.setLayout(v_box)
 

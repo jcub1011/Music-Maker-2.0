@@ -1,7 +1,7 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget
 from pytube import YouTube
 from mutagen.easyid3 import EasyID3
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 
 class TagHandler:
@@ -89,17 +89,30 @@ class DownloadRequest(NamedTuple):
     audio_only: bool
     output_path: str
 
+
 class ProcessRequest(NamedTuple):
     audio_file_to_process: str
     video_file_to_process: str
     output_file: str
 
-class DownloadHandler(QWidget):
-    def _init__(self):
-        super(DownloadHandler, self).__init__()
 
+class DownloadViewer(QWidget):
+    def _init__(self):
+        super(DownloadViewer, self).__init__()
+
+        print("init download handler")
+        # Top Bar
         top_bar = QHBoxLayout()
-        download_label = QLabel("Downloads")
         self.stop_button = QPushButton("Stop")
-        top_bar.addWidget(download_label)
+        top_bar.addWidget(QLabel("Downloads"))
         top_bar.addWidget(self.stop_button)
+
+        self.download_list_view = QListWidget()
+
+        layout = QVBoxLayout()
+        layout.addLayout(top_bar)
+        layout.addWidget(self.download_list_view)
+        self.setLayout(layout)
+
+    def set_download_list(self, download_list: List[DownloadRequest]):
+        print(f"Setting download list: {len(download_list)} items.")

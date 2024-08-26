@@ -15,7 +15,7 @@ from DownloadHandler import DownloadRequest
 
 class StreamViewer(QWidget):
     def __init__(self):
-        super(StreamViewer, self).__init__()
+        super().__init__()
 
         self.output_path: str = ""
         self.on_cancel_callback = []
@@ -58,26 +58,20 @@ class StreamViewer(QWidget):
         column_2 = QVBoxLayout()
         column_2.addWidget(self.cancel_btn)
         column_2.addWidget(self.begin_btn)
-        column_2_widget = QWidget()
-        column_2_widget.setLayout(column_2)
 
         row_1 = QHBoxLayout()
         row_1.addWidget(QLabel("To Download"))
         row_1.addWidget(self.audio_only_toggle)
         row_1.addWidget(self.select_toggle)
-        row_1_widget = QWidget()
-        row_1_widget.setLayout(row_1)
 
         column_1 = QVBoxLayout()
-        column_1.addWidget(row_1_widget)
+        column_1.addLayout(row_1)
         column_1.addWidget(self.stream_list_view)
         column_1.addWidget(self.progress_bar)
-        column_1_widget = QWidget()
-        column_1_widget.setLayout(column_1)
 
         layout = QHBoxLayout()
-        layout.addWidget(column_1_widget)
-        layout.addWidget(column_2_widget)
+        layout.addLayout(column_1)
+        layout.addLayout(column_2)
         self.setLayout(layout)
 
     def add_on_cancel_callback(self, callback):
