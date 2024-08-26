@@ -1,5 +1,12 @@
+import os
+import queue
+import time
+from uuid import uuid4
+
+import mutagen
+import pytube
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget
-from pytube import YouTube
+from pytube import YouTube, StreamQuery
 from mutagen.easyid3 import EasyID3
 from typing import NamedTuple, List
 
@@ -45,6 +52,10 @@ class TagHandler:
             if line.find('Released on: ') != -1:
                 year = line.split(': ')[1].split('-', 1)[0]
                 break
+
+        # If the release year wasn't found.
+        if year == "":
+            year = str(video.publish_date.date.year)
 
         # Make metadata dict.
         metadata[cls.TITLE[0]] = title
@@ -97,6 +108,32 @@ class ProcessRequest(NamedTuple):
 
 
 class DownloadViewer(QWidget):
+    # Characters that can't be in Windows directories.
+    forbidden_chars = [
+        ">",
+        "<",
+        ":",
+        '"',
+        "\\",
+        "/",
+        "|",
+        "?",
+        "*",
+        "."
+    ]
+
+    @classmethod
+    def convert_to_file_name(cls, name: str):
+        cleaned_name = ""
+
+        for char in name:
+            if char not in cls.forbidden_chars:
+                cleaned_name += char
+            else:
+                cleaned_name += " "
+
+        return cleaned_name
+
     def __init__(self):
         super(DownloadViewer, self).__init__()
 
@@ -117,3 +154,117 @@ class DownloadViewer(QWidget):
 
     def set_download_list(self, download_list: List[DownloadRequest]):
         print(f"Setting download list: {len(download_list)} items.")
+        for request in download_list:
+            print(self.download_audio(request))
+
+
+    @staticmethod
+    def download_audio(request: DownloadRequest) -> tuple[str, DownloadRequest]:
+        """
+        Return
+            (audio output path, the original download request)
+        """
+
+        print(f"Beginning audio download for '{request.video.title}'.")
+        filename = f"{uuid4()}.mp4"
+        print(f"Designated filename: {filename}")
+
+        try:
+            print("")# metadata = TagHandler.retrieve_metadata(request.video)
+        except mutagen.MutagenError as error:
+            print(f"Unable to get metadata for: {request.video.title}")
+            raise error
+
+        highest_quality = StreamQuery(request.video.fmt_streams).get_audio_only()
+
+        output_location = highest_quality.download(
+            output_path=request.output_path,
+            filename=filename,
+            max_retries=5
+        )
+
+        print(f"Downloaded {request.video.title} audio @ '{output_location}'.")
+        return output_location, request
+
+    @staticmethod
+    def download_with_progress(video: YouTube, input_queue: queue, output_queue: queue, download_audio: bool,
+                               output_path: str, filename: str, update_interval: int = 100) -> None:
+        """
+        Attempts to download a YouTube video with the ability to send progress reports and receive pause/cancel requests.
+        :param output_path: The folder to download the file to.
+        :param filename: The name of the file to use. (xyz.abc)
+        :param video: The YouTube video to download.
+        :param input_queue: Messages to be sent to the process.
+        :param output_queue: Progress messages sent from the process.
+        :param download_audio: Set true if downloading audio, otherwise it will download video.
+        :param update_interval: How often to send progress information and check for messages. (milliseconds)
+        :return: None
+        """
+        print(f"Beginning to download {video.title}.")
+        output_location = os.path.join(output_path, filename)
+        ns_update_interval: int = update_interval * 1000000
+        is_paused = False
+        canceled = False
+
+        try:
+            if download_audio:
+                stream = StreamQuery(video.fmt_streams).get_audio_only()
+            else:
+                stream = StreamQuery(video.fmt_streams).filter(
+                    mime_type="video/mp4", adaptive=True).order_by("resolution").desc().first()
+
+            with open(output_location, 'wb') as file:
+                stream_chunks = pytube.streams.request.stream(stream.url)
+                filesize: int = stream.filesize
+                downloaded: int = 0
+                time_of_last_queue_check: int = time.monotonic_ns()
+                output_queue.put({
+                    "type": "update",
+                    "value": "Started"
+                })
+
+                while True:
+                    # Retrieve data.
+                    if not is_paused:
+                        chunk = next(stream_chunks, None)
+                        if chunk:
+                            file.write(chunk)
+                            downloaded += len(chunk)
+                        else:
+                            output_queue.put({
+                                "type": "update",
+                                "value": "Completed"
+                            })
+                            break
+                    else:
+                        time.sleep(update_interval / 1000)
+
+                    # Send and receive messages.
+                    if time.monotonic_ns() - time_of_last_queue_check > ns_update_interval:
+                        time_of_last_queue_check = time.monotonic_ns()
+                        while not input_queue.empty():
+                            message: dict = input_queue.get()
+                            if message["type"] == "event":
+                                if message["value"] == "pause":
+                                    is_paused = True
+                                elif message["value"] == "unpause":
+                                    is_paused = False
+                                elif message["value"] == "cancel":
+                                    canceled = True
+                                    break
+
+                        output_queue.put({
+                            "type": "progress",
+                            "value": int(downloaded / filesize * 100)
+                        })
+
+        except Exception as exception:
+            print(exception)
+            canceled = True
+
+        finally:
+            if canceled:
+                if os.path.exists(output_location):
+                    os.remove(output_location)
+
+
