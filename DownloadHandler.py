@@ -289,7 +289,7 @@ class DownloadViewer(QWidget):
             with open(temp_output_loc, 'wb') as file:
                 stream_chunks = pytube.streams.request.stream(stream.url)
                 filesize: int = stream.filesize
-                downloaded: int = 0
+                downloaded: float = 0.0
                 ars.output_queue.put({
                     "type": "update",
                     "value": "started",
