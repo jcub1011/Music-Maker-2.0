@@ -7,8 +7,11 @@ from multiprocessing import Manager
 from enum import Enum
 
 import pytube
+from ffmpeg import ffmpeg, FFmpegError
 from mutagen.mp4 import MP4Cover
 from pytube import Stream, StreamQuery
+
+from AppDataHandler import DataHandler
 
 
 class Metadata(NamedTuple):
@@ -116,8 +119,8 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
     ))
 
     file_system_safe_name: str = convert_to_file_name(f"{ars.metadata.title} - {ars.metadata.author}")
-    temporary_file_path_a: str = os.path.join(ars.output_folder, f"{file_system_safe_name}-a.mp4")
-    temporary_file_path_v: str = os.path.join(ars.output_folder, f"{file_system_safe_name}-v.mp4")
+    temporary_file_path_a: str = os.path.join(ars.output_folder, f"{ars.uuid}-a.mp4")
+    temporary_file_path_v: str = os.path.join(ars.output_folder, f"{ars.uuid}-v.mp4")
     update_interval_ns: int = ars.message_check_frequency * 1000000
 
     try:
@@ -160,12 +163,48 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
             uuid=ars.uuid
         ))
 
+        if ars.audio_only:
+            extension = ".m4a"
+        else:
+            extension = ".mp4"
 
-        ars.output_queue.put(DownloadProgressMessage(
-            type="event",
-            value="completed processing",
-            uuid=ars.uuid
-        ))
+        remux_output_file: str = os.path.join(ars.output_folder, file_system_safe_name + extension)
+        attempts: int = 0
+        MAX_ATTEMPTS: int = 5
+
+        # Get valid location.
+        while os.path.exists(remux_output_file):
+            if attempts >= MAX_ATTEMPTS:
+                raise FileExistsError(f"Too many files with the name '{file_system_safe_name + extension}'.")
+            else:
+                remux_output_file: str = os.path.join(ars.output_folder,
+                                                      f"{file_system_safe_name}({str(attempts)}){extension}")
+
+        try:
+            # Attempt to process downloads.
+            if ars.audio_only:
+                mpeg = (
+                    ffmpeg.FFmpeg(DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
+                    .option("y").input(temporary_file_path_a).output(
+                        remux_output_file,
+                        codec="copy"
+                    )
+                )
+                mpeg.execute()
+
+        except:
+            print(traceback.format_exc())
+
+            # Cleanup.
+            if os.path.exists(remux_output_file):
+                os.remove(remux_output_file)
+
+        finally:
+            ars.output_queue.put(DownloadProgressMessage(
+                type="event",
+                value="completed processing",
+                uuid=ars.uuid
+            ))
 
     except:
         print(traceback.print_exc())
