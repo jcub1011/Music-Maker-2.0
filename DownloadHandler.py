@@ -1,21 +1,19 @@
 import os
 import queue
+import subprocess
 import threading
 import time
 import traceback
-from cgi import print_exception
 from concurrent.futures.thread import ThreadPoolExecutor
-from traceback import print_exc, print_stack
 from typing import NamedTuple, List
 from uuid import uuid4
+from subprocess import CREATE_NO_WINDOW
 
 import ffmpeg
-import mutagen.mp4
 import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
 from ffmpeg import FFmpegError
-from mutagen.easyid3 import EasyID3
 from mutagen.mp4 import MP4
 from pytube import YouTube, StreamQuery
 
@@ -335,9 +333,10 @@ class DownloadViewer(QWidget):
                            DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
 
             try:
-                meta = TagHandlerM4A.retrieve_metadata(ars.video)
-                print(audio_file, meta)
-                TagHandlerM4A.append_metadata(audio_file, meta)
+                if audio_file is not None:
+                    meta = TagHandlerM4A.retrieve_metadata(ars.video)
+                    print(audio_file, meta)
+                    TagHandlerM4A.append_metadata(audio_file, meta)
 
             except Exception as exe:
                 print(f"Unable to get metadata.\n{traceback.format_exc()}")
@@ -417,8 +416,11 @@ def remux_to_audio(output_folder: str, file_path: str, output_name: str,
             )
         )
 
-        print(fpeg.execute())
+        fpeg.execute()
         return os.path.join(output_folder, file_name)
 
     except FFmpegError as err:
+        print(traceback.format_exc())
         raise err
+    except Exception as err:
+        print(traceback.format_exc())
