@@ -2,6 +2,7 @@ import os
 import queue
 import threading
 import time
+import traceback
 from cgi import print_exception
 from concurrent.futures.thread import ThreadPoolExecutor
 from traceback import print_exc, print_stack
@@ -53,6 +54,8 @@ class TagHandlerM4A:
             """
             metadata[cls.ARTIST[0]] = video.author
             metadata[cls.YEAR[0]] = video.publish_date.year
+            metadata[cls.ALBUM[0]] = ""
+            metadata[cls.ALBUM_ARTIST[0]] = ""
             print("Metadata: ", metadata)
             return metadata
 
@@ -96,7 +99,7 @@ class TagHandlerM4A:
         tags[cls.ARTIST[1]] = metadata[cls.ARTIST[0]]
         tags[cls.ALBUM_ARTIST[1]] = metadata[cls.ALBUM_ARTIST[0]]
         tags[cls.ALBUM[1]] = metadata[cls.ALBUM[0]]
-        tags[cls.YEAR[1]] = metadata[cls.YEAR[0]]
+        tags[cls.YEAR[1]] = str(metadata[cls.YEAR[0]])
 
         tags.save(file_path)
 
@@ -106,12 +109,6 @@ class DownloadRequest(NamedTuple):
     video: YouTube
     audio_only: bool
     output_path: str
-
-
-class ProcessRequest(NamedTuple):
-    audio_file_to_process: str
-    video_file_to_process: str
-    output_file: str
 
 
 class DownloadThreadArgs(NamedTuple):
@@ -276,6 +273,9 @@ class DownloadViewer(QWidget):
         canceled = False
 
         try:
+            if not ars.download_audio:
+                raise NotImplementedError("Video download is not supported at the moment.")
+
             if self.stop_download_event.is_set():
                 canceled = True
                 return
@@ -336,10 +336,11 @@ class DownloadViewer(QWidget):
 
             try:
                 meta = TagHandlerM4A.retrieve_metadata(ars.video)
+                print(audio_file, meta)
                 TagHandlerM4A.append_metadata(audio_file, meta)
 
             except Exception as exe:
-                print(f"Unable to get metadata.\n{exe}")
+                print(f"Unable to get metadata.\n{traceback.format_exc()}")
 
             os.remove(temp_output_loc)
 
@@ -381,7 +382,18 @@ class DownloadViewer(QWidget):
                 })
 
 
-def remux_to_audio(output_folder: str, file_path: str, output_name: str, ffmpeg_loc: str, max_attempts: int = 5, current_attempt: int = 0):
+def remux_to_audio(output_folder: str, file_path: str, output_name: str,
+                   ffmpeg_loc: str, max_attempts: int = 5, current_attempt: int = 0) -> str:
+    """
+    Converts the .mp4 to .m4a and returns the new file location.
+    :param output_folder:
+    :param file_path:
+    :param output_name:
+    :param ffmpeg_loc:
+    :param max_attempts:
+    :param current_attempt:
+    :return:
+    """
     if current_attempt >= max_attempts:
         raise FileExistsError(f"Unable to remux '{output_name}'. "
                           f"Make sure there aren't duplicate files with the same name.")
@@ -396,8 +408,7 @@ def remux_to_audio(output_folder: str, file_path: str, output_name: str, ffmpeg_
                 raise FileExistsError(f"Unable to remux '{output_name}'. "
                                       f"Make sure there aren't duplicate files with the same name.")
             else:
-                remux_to_audio(output_folder, file_path, output_name, ffmpeg_loc, max_attempts, current_attempt + 1)
-                return
+                return remux_to_audio(output_folder, file_path, output_name, ffmpeg_loc, max_attempts, current_attempt + 1)
 
         fpeg = (
             ffmpeg.FFmpeg(ffmpeg_loc).option("y").input(file_path).output(
