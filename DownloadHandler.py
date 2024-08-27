@@ -1,21 +1,18 @@
 import os
 import queue
-from argparse import ArgumentError
-
-import ffmpeg
 import threading
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
+from typing import NamedTuple, List
 from uuid import uuid4
 
+import ffmpeg
 import pytube
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem, \
-    QProgressBar, QScrollArea, QFormLayout
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
 from ffmpeg import FFmpegError
-from pytube import YouTube, StreamQuery
 from mutagen.easyid3 import EasyID3
-from typing import NamedTuple, List
+from pytube import YouTube, StreamQuery
 
 from AppDataHandler import DataHandler
 from CustomWidgets import DownloadListItem
