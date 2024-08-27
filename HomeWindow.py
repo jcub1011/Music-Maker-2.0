@@ -87,7 +87,7 @@ class HomeWindow(QWidget):
         self.selectedFileLabel = QLabel("FFMPEG Location")
         self.selectedFile = QLineEdit()
         self.selectedFile.setReadOnly(True)
-        self.selectedFile.setPlaceholderText("Select the ffmpeg.exe file.")
+        self.selectedFile.setPlaceholderText("Select the ffmpeg file.")
         self.selectedFile.setText("No file selected.")
         self.selectFileButton = QPushButton("Select FFMPEG File")
         self.selectFileButton.setStyleSheet("padding: 5px")
@@ -103,11 +103,17 @@ class HomeWindow(QWidget):
         v_box.addRow(self.urlInputLabel)
         v_box.addRow(self.urlInput)
 
-        v_box.addWidget(self.selectedFolderLabel)
+        v_box.addRow(self.selectedFolderLabel)
         folder_h_box = QHBoxLayout(self)
         folder_h_box.addWidget(self.selectedFolder)
         folder_h_box.addWidget(self.selectFolderButton)
         v_box.addRow(folder_h_box)
+
+        v_box.addRow(self.selectedFileLabel)
+        file_h_box = QHBoxLayout(self)
+        file_h_box.addWidget(self.selectedFile)
+        file_h_box.addWidget(self.selectFileButton)
+        v_box.addRow(file_h_box)
 
         footer_h_box = QHBoxLayout(self)
         footer_h_box.addWidget(self.simultaneousDownloads)
@@ -122,6 +128,7 @@ class HomeWindow(QWidget):
         preferences = DataHandler.get_config_file_info()
         self.urlInput.setText(preferences[DataHandler.url_key])
         self.selectedFolder.setText(preferences[DataHandler.folder_key])
+        self.selectedFile.setText(preferences[DataHandler.ffmpeg_key])
         self.simultaneousDownloads.set_value(preferences[DataHandler.sim_download_key])
         self.simultaneousProcesses.set_value(preferences[DataHandler.sim_process_key])
         self.max_downloads.set_value(preferences[DataHandler.stream_limit_key])
@@ -139,6 +146,7 @@ class HomeWindow(QWidget):
         print("Updating user settings.")
         DataHandler.update_config_file(DataHandler.url_key, self.urlInput.text())
         DataHandler.update_config_file(DataHandler.folder_key, self.selectedFolder.text())
+        DataHandler.update_config_file(DataHandler.ffmpeg_key, self.selectedFile.text())
         DataHandler.update_config_file(DataHandler.sim_download_key, self.simultaneousDownloads.get_value())
         DataHandler.update_config_file(DataHandler.sim_process_key, self.simultaneousProcesses.get_value())
         DataHandler.update_config_file(DataHandler.stream_limit_key, self.max_downloads.get_value())
@@ -173,7 +181,7 @@ class HomeWindow(QWidget):
         else:
             start_folder = "/home"
 
-        file = str(QFileDialog.getExistingDirectory(self, "Select Directory", directory=start_folder))
+        file = str(QFileDialog.getOpenFileName(self, "Select Directory", directory=start_folder)[0])
         if path.exists(file):
             self.selectedFile.setText(file)
             print(f"FFMPEG download location set to '{self.selectedFile.text()}'.")
