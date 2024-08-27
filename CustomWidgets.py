@@ -88,14 +88,15 @@ class DownloadListItem(QWidget):
         super().__init__()
 
         self.label = QLabel(text)
-        self.label.setFixedHeight(10)
+        self.label.setFixedHeight(16)
         self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(16)
 
         layout = QVBoxLayout()
-        layout.setSpacing(0)
         layout.addWidget(self.label)
         layout.addWidget(self.progress_bar)
         self.setLayout(layout)
+        self.setFixedHeight(32)
         print(f"Created list item {text}")
 
     def update_progress(self, progress: int):
