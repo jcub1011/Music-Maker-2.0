@@ -25,7 +25,7 @@ class TagHandlerM4A:
     # Tag Label Constants
     TITLE = ("Title", "\xa9nam")
     ARTIST = ("Artist", "\xa9ART")
-    ALBUM_ARTIST = ("AlbumArtist", "\xa9ART")
+    ALBUM_ARTIST = ("AlbumArtist", "aART")
     ALBUM = ("Album", "\xa9alb")
     YEAR = ("Year", "\xa9day")
 
