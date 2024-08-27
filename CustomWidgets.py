@@ -1,7 +1,8 @@
 import typing
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSpinBox, QWidget, QDialog, QDialogButtonBox, QCheckBox, \
+    QListWidgetItem, QProgressBar
 
 
 class LabeledSpinbox(QWidget):
@@ -80,3 +81,22 @@ class LabeledCheckbox(QWidget):
 
     def get_value(self) -> bool:
         return self.check_box.isChecked()
+
+
+class DownloadListItem(QWidget):
+    def __init__(self, text: str):
+        super().__init__()
+
+        self.label = QLabel(text)
+        self.label.setFixedHeight(10)
+        self.progress_bar = QProgressBar()
+
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+        layout.addWidget(self.label)
+        layout.addWidget(self.progress_bar)
+        self.setLayout(layout)
+        print(f"Created list item {text}")
+
+    def update_progress(self, progress: int):
+        self.progress_bar.setValue(progress)

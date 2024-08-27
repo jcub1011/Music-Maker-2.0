@@ -3,7 +3,7 @@ from typing import List
 
 import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget
+    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget, QFormLayout
 from pytube import YouTube
 
 from CustomWidgets import LabeledSpinbox, ErrorDialog
@@ -89,22 +89,22 @@ class HomeWindow(QWidget):
         self.max_downloads = LabeledSpinbox("Max Downloads\n(0 = unlimited)", 0)
 
         # Layout
-        v_box = QVBoxLayout(self)
-        v_box.addWidget(self.urlInputLabel)
-        v_box.addWidget(self.urlInput)
+        v_box = QFormLayout(self)
+        v_box.addRow(self.urlInputLabel)
+        v_box.addRow(self.urlInput)
 
         v_box.addWidget(self.selectedFolderLabel)
         folder_h_box = QHBoxLayout(self)
         folder_h_box.addWidget(self.selectedFolder)
         folder_h_box.addWidget(self.selectFolderButton)
-        v_box.addLayout(folder_h_box)
+        v_box.addRow(folder_h_box)
 
         footer_h_box = QHBoxLayout(self)
         footer_h_box.addWidget(self.simultaneousDownloads)
         footer_h_box.addWidget(self.simultaneousProcesses)
         footer_h_box.addWidget(self.max_downloads)
         footer_h_box.addWidget(self.getStreamsButton)
-        v_box.addLayout(footer_h_box)
+        v_box.addRow(footer_h_box)
 
         self.setLayout(v_box)
 

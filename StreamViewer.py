@@ -7,7 +7,7 @@ import PyQt6
 import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, \
-    QProgressBar
+    QProgressBar, QFormLayout
 
 import AppDataHandler
 from CustomWidgets import LabeledCheckbox
@@ -51,6 +51,7 @@ class StreamViewer(QWidget):
                 self.audio_only_toggle.check_box.isChecked()))
 
         self.select_toggle = QPushButton("Toggle Select")
+        self.select_toggle.setStyleSheet("padding: 5px")
         self.select_toggle.clicked.connect(self.toggle_select)
 
         self.stream_list_view = QListWidget()
@@ -66,15 +67,16 @@ class StreamViewer(QWidget):
         row_1.addWidget(QLabel("To Download"))
         row_1.addWidget(self.audio_only_toggle)
         row_1.addWidget(self.select_toggle)
+        row_1.addWidget(self.cancel_btn)
 
         column_1 = QVBoxLayout()
         column_1.addLayout(row_1)
         column_1.addWidget(self.stream_list_view)
         column_1.addWidget(self.progress_bar)
 
-        layout = QHBoxLayout()
-        layout.addLayout(column_1)
-        layout.addLayout(column_2)
+        layout = QFormLayout()
+        layout.addRow(column_1)
+        layout.addRow(self.begin_btn)
         self.setLayout(layout)
 
     def add_on_cancel_callback(self, callback):

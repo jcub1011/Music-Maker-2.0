@@ -8,12 +8,14 @@ from uuid import uuid4
 
 import pytube
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem, \
+    QProgressBar, QScrollArea, QFormLayout
 from pytube import YouTube, StreamQuery
 from mutagen.easyid3 import EasyID3
 from typing import NamedTuple, List
 
 from AppDataHandler import DataHandler
+from CustomWidgets import DownloadListItem
 
 
 class TagHandler:
@@ -169,6 +171,7 @@ class DownloadViewer(QWidget):
         self.total_threads_to_finish = 0
         self.thread_pool: ThreadPoolExecutor = None
         self.go_back_callback = []
+        self.uuid_list_item_map: dict[str, DownloadListItem] = {}
 
         # Top Bar
         top_bar = QHBoxLayout()
@@ -180,7 +183,8 @@ class DownloadViewer(QWidget):
         top_bar.addWidget(self.stop_button)
         top_bar.addWidget(self.return_button)
 
-        self.download_list_view = QListWidget()
+        self.download_list_view = QScrollArea()
+        self.download_list_view.setWidgetResizable(True)
 
         layout = QVBoxLayout()
         layout.addLayout(top_bar)
@@ -216,10 +220,24 @@ class DownloadViewer(QWidget):
         audio_only = DataHandler.get_config_file_info()[DataHandler.audio_only_key]
         print(f"Using {thread_count} threads.\nAudio Only: {audio_only}")
 
+        progress_bar_list = []
         self.thread_pool = ThreadPoolExecutor(max_workers=thread_count)
         for request in download_list:
-            self.thread_pool.submit(self.download_with_progress, DownloadThreadArgs(
-                    request.video, self.output_queue, request.audio_only, request.output_path, f"{uuid4()}.mp4"))
+            args = DownloadThreadArgs(request.video, self.output_queue, request.audio_only, request.output_path, f"{uuid4()}.mp4")
+            self.thread_pool.submit(self.download_with_progress, args)
+
+            item = DownloadListItem(f"{request.video_number}. {request.video.title}")
+            self.uuid_list_item_map[args.filename] = item
+            progress_bar_list.append(item)
+
+        scroll_layout = QFormLayout()
+        scroll_layout.setVerticalSpacing(0)
+        for item in progress_bar_list:
+            scroll_layout.addRow(item)
+
+        container = QWidget()
+        container.setLayout(scroll_layout)
+        self.download_list_view.setWidget(container)
 
     def check_for_messages(self):
         while not self.output_queue.empty():
@@ -242,6 +260,9 @@ class DownloadViewer(QWidget):
                     if self.thread_pool is not None:
                         self.thread_pool.shutdown()
 
+        elif str.lower(message["type"]) == "progress":
+            self.uuid_list_item_map[message["uuid"]].update_progress(message["value"])
+
     def download_with_progress(self, ars: DownloadThreadArgs) -> None:
         """
         Attempts to download a YouTube video with the ability to send progress reports and receive pause/cancel requests.
@@ -254,6 +275,12 @@ class DownloadViewer(QWidget):
         canceled = False
 
         try:
+            if self.stop_download_event.is_set():
+                canceled = True
+                return
+            else:
+                time_of_last_queue_check: int = time.monotonic_ns()
+
             if ars.download_audio:
                 stream = StreamQuery(ars.video.fmt_streams).get_audio_only()
             else:
@@ -264,10 +291,10 @@ class DownloadViewer(QWidget):
                 stream_chunks = pytube.streams.request.stream(stream.url)
                 filesize: int = stream.filesize
                 downloaded: int = 0
-                time_of_last_queue_check: int = time.monotonic_ns()
                 ars.output_queue.put({
                     "type": "update",
-                    "value": "started"
+                    "value": "started",
+                    "uuid": ars.filename
                 })
 
                 print(f"Beginning download {ars.filename}.")
@@ -284,7 +311,7 @@ class DownloadViewer(QWidget):
                         ars.output_queue.put({
                             "type": "progress",
                             "value": int(downloaded / filesize * 100),
-                            "video": ars.video
+                            "uuid": ars.filename
                         })
 
                     # Retrieve data.
@@ -296,7 +323,8 @@ class DownloadViewer(QWidget):
                         else:
                             ars.output_queue.put({
                                 "type": "update",
-                                "value": "completed"
+                                "value": "completed",
+                                "uuid": ars.filename
                             })
                             break
                     else:
@@ -305,7 +333,8 @@ class DownloadViewer(QWidget):
         except Exception as exception:
             self.output_queue.put({
                 "type": "error",
-                "value": exception
+                "value": exception,
+                "uuid": ars.filename
             })
             print(exception)
             canceled = True
@@ -315,7 +344,8 @@ class DownloadViewer(QWidget):
                 if canceled:
                     ars.output_queue.put({
                         "type": "update",
-                        "value": "canceled"
+                        "value": "canceled",
+                        "uuid": ars.filename
                     })
                     if os.path.exists(output_location):
                         os.remove(output_location)
@@ -323,12 +353,14 @@ class DownloadViewer(QWidget):
             except Exception as exception:
                 self.output_queue.put({
                     "type": "error",
-                    "value": exception
+                    "value": exception,
+                    "uuid": ars.filename
                 })
                 print(exception)
 
             finally:
                 self.output_queue.put({
                     "type": "update",
-                    "value": "thread finished"
+                    "value": "thread finished",
+                    "uuid": ars.filename
                     })
