@@ -2,29 +2,33 @@ import os
 import queue
 import threading
 import time
+from cgi import print_exception
 from concurrent.futures.thread import ThreadPoolExecutor
+from traceback import print_exc, print_stack
 from typing import NamedTuple, List
 from uuid import uuid4
 
 import ffmpeg
+import mutagen.mp4
 import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
 from ffmpeg import FFmpegError
 from mutagen.easyid3 import EasyID3
+from mutagen.mp4 import MP4
 from pytube import YouTube, StreamQuery
 
 from AppDataHandler import DataHandler
 from CustomWidgets import DownloadListItem
 
 
-class TagHandler:
+class TagHandlerM4A:
     # Tag Label Constants
-    TITLE = ("Title", "TIT2")
-    ARTIST = ("Artist", "TPE1")
-    ALBUM_ARTIST = ("AlbumArtist", "TPE2")
-    ALBUM = ("Album", "TALB")
-    YEAR = ("Year", "TYER")
+    TITLE = ("Title", "\xa9nam")
+    ARTIST = ("Artist", "\xa9ART")
+    ALBUM_ARTIST = ("AlbumArtist", "\xa9ART")
+    ALBUM = ("Album", "\xa9alb")
+    YEAR = ("Year", "\xa9day")
 
     @classmethod
     def retrieve_metadata(cls, video: YouTube) -> dict:
@@ -48,6 +52,8 @@ class TagHandler:
                 metadata[self.TITLE[0]] = metadata[self.TITLE[0]][0]
             """
             metadata[cls.ARTIST[0]] = video.author
+            metadata[cls.YEAR[0]] = video.publish_date.year
+            print("Metadata: ", metadata)
             return metadata
 
         title, artist = lines[2].split(' · ', 1)
@@ -62,7 +68,7 @@ class TagHandler:
 
         # If the release year wasn't found.
         if year == "":
-            year = str(video.publish_date.date.year)
+            year = str(video.publish_date.year)
 
         # Make metadata dict.
         metadata[cls.TITLE[0]] = title
@@ -79,26 +85,20 @@ class TagHandler:
     @classmethod
     def append_metadata(cls, file_path: str, metadata: dict):
         """
-        Adds metadata to a mp3 file.
-        :param file_path: Path of the mp3 file.
+        Adds metadata to a m4a file.
+        :param file_path: Path of the m4a file.
         :param metadata: The metadata to add.
         :return: None
         """
-        # Docs: https://mutagen.readthedocs.io/en/latest/api/id3.html
-        audio = EasyID3(file_path)
+        tags = MP4(file_path)
 
-        # Register keys.
-        audio.RegisterTextKey(cls.TITLE[0], cls.TITLE[1])
-        audio.RegisterTextKey(cls.ARTIST[0], cls.ARTIST[1])
-        audio.RegisterTextKey(cls.ALBUM_ARTIST[0], cls.ALBUM_ARTIST[1])
-        audio.RegisterTextKey(cls.ALBUM[0], cls.ALBUM[1])
-        audio.RegisterTextKey(cls.YEAR[0], cls.YEAR[1])
+        tags[cls.TITLE[1]] = metadata[cls.TITLE[0]]
+        tags[cls.ARTIST[1]] = metadata[cls.ARTIST[0]]
+        tags[cls.ALBUM_ARTIST[1]] = metadata[cls.ALBUM_ARTIST[0]]
+        tags[cls.ALBUM[1]] = metadata[cls.ALBUM[0]]
+        tags[cls.YEAR[1]] = metadata[cls.YEAR[0]]
 
-        # Append Metadata
-        for key, value in metadata.items():
-            audio[key] = value
-
-        audio.save()
+        tags.save(file_path)
 
 
 class DownloadRequest(NamedTuple):
@@ -331,11 +331,17 @@ class DownloadViewer(QWidget):
                     else:
                         time.sleep(ars.update_interval / 1000)
 
-            remux_to_audio(ars.output_path, temp_output_loc, self.convert_to_file_name(f"{ars.video.title} - {ars.video.author}"),
+            audio_file = remux_to_audio(ars.output_path, temp_output_loc, self.convert_to_file_name(f"{ars.video.title} - {ars.video.author}"),
                            DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
 
-            os.remove(temp_output_loc)
+            try:
+                meta = TagHandlerM4A.retrieve_metadata(ars.video)
+                TagHandlerM4A.append_metadata(audio_file, meta)
 
+            except Exception as exe:
+                print(f"Unable to get metadata.\n{exe}")
+
+            os.remove(temp_output_loc)
 
         except Exception as exception:
             self.output_queue.put({
@@ -401,6 +407,7 @@ def remux_to_audio(output_folder: str, file_path: str, output_name: str, ffmpeg_
         )
 
         print(fpeg.execute())
+        return os.path.join(output_folder, file_name)
 
     except FFmpegError as err:
         raise err

@@ -8,7 +8,7 @@ from pytube import YouTube
 
 from AppDataHandler import DataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
-from DownloadHandler import DownloadViewer, DownloadRequest
+from DownloadHandler import DownloadViewer, DownloadRequest, TagHandlerM4A
 from StreamViewer import StreamViewer
 
 
@@ -33,6 +33,14 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(self.download_viewer)
 
         self.open_home()
+
+        # TagHandlerM4A.append_metadata("C:\\Users\\jcubm\\Downloads\\Music Ingest\\Back To Black - Amy Winehouse.m4a", {
+        #     TagHandlerM4A.TITLE[0]: "Title",
+        #     TagHandlerM4A.ARTIST[0]: "artist",
+        #     TagHandlerM4A.ALBUM_ARTIST[0]: "album art",
+        #     TagHandlerM4A.ALBUM[0]: "album",
+        #     TagHandlerM4A.YEAR[0]: "1200",
+        # })
 
     def open_stream_viewer(self, urls: List[YouTube], output_path: str):
         print("Opening stream viewer.")
