@@ -8,7 +8,7 @@ from enum import Enum
 
 import pytube
 from ffmpeg import ffmpeg, FFmpegError
-from mutagen.mp4 import MP4Cover
+from mutagen.mp4 import MP4Cover, MP4
 from pytube import Stream, StreamQuery
 
 from AppDataHandler import DataHandler
@@ -191,6 +191,7 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
                     )
                 )
                 mpeg.execute()
+                add_metadata_mp4(remux_output_file, ars.metadata)
 
         except:
             print(traceback.format_exc())
@@ -281,3 +282,24 @@ def download_stream_with_progress(stream: Stream, output_file: str, output_queue
     except Exception as exe:
         print(traceback.format_exc())
         return DownloadErrorCode.ERROR
+
+
+def add_metadata_mp4(file_path: str, metadata: Metadata):
+    """
+    Embeds the metadata to the provided mp4/m4a file.
+    :param file_path: Path to the file.
+    :param metadata: Metadata to embed.
+    :return: None
+    """
+    tags = MP4(file_path)
+
+    tags["\xa9nam"] = metadata.title
+    tags["\xa9ART"] = metadata.author
+    tags["\xa9alb"] = metadata.album
+    tags["\xa9day"] = metadata.year
+    tags["covr"] = metadata.cover
+
+    tags.save()
+
+
+
