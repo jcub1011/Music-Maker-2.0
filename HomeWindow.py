@@ -83,6 +83,16 @@ class HomeWindow(QWidget):
         self.selectFolderButton.setStyleSheet("padding: 5px")
         self.selectFolderButton.clicked.connect(self.select_folder)
 
+        # FFMPEG input field.
+        self.selectedFileLabel = QLabel("FFMPEG Location")
+        self.selectedFile = QLineEdit()
+        self.selectedFile.setReadOnly(True)
+        self.selectedFile.setPlaceholderText("Select the ffmpeg.exe file.")
+        self.selectedFile.setText("No file selected.")
+        self.selectFileButton = QPushButton("Select FFMPEG File")
+        self.selectFileButton.setStyleSheet("padding: 5px")
+        self.selectFileButton.clicked.connect(self.select_file)
+
         # Footer selectors.
         self.simultaneousDownloads = LabeledSpinbox("Simultaneous\nDownloads")
         self.simultaneousProcesses = LabeledSpinbox("Simultaneous\nProcesses")
@@ -152,6 +162,23 @@ class HomeWindow(QWidget):
             print(f"Output folder set to '{self.selectedFolder.text()}'.")
         else:
             print(f"Invalid folder '{folder}'.")
+
+    def select_file(self):
+        """Prompts the user to select the location of ffmpeg.exe."""
+        print("Selecting folder.")
+
+        # Start from folder that was selected previously.
+        if path.exists(self.selectedFile.text()):
+            start_folder = self.selectedFile.text()
+        else:
+            start_folder = "/home"
+
+        file = str(QFileDialog.getExistingDirectory(self, "Select Directory", directory=start_folder))
+        if path.exists(file):
+            self.selectedFile.setText(file)
+            print(f"FFMPEG download location set to '{self.selectedFile.text()}'.")
+        else:
+            print(f"Invalid file '{file}'.")
 
     def validate_inputs(self) -> str:
         """Returns an error message if any of the inputs are invalid, otherwise it is an empty string."""
