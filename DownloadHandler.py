@@ -1,6 +1,8 @@
 import os
 import queue
-import string
+from argparse import ArgumentError
+
+import ffmpeg
 import threading
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -10,6 +12,7 @@ import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem, \
     QProgressBar, QScrollArea, QFormLayout
+from ffmpeg import FFmpegError
 from pytube import YouTube, StreamQuery
 from mutagen.easyid3 import EasyID3
 from typing import NamedTuple, List
@@ -223,7 +226,8 @@ class DownloadViewer(QWidget):
         progress_bar_list = []
         self.thread_pool = ThreadPoolExecutor(max_workers=thread_count)
         for request in download_list:
-            args = DownloadThreadArgs(request.video, self.output_queue, request.audio_only, request.output_path, f"{uuid4()}.mp4")
+            args = DownloadThreadArgs(request.video, self.output_queue, request.audio_only, request.output_path,
+                                      f"{uuid4()}.mp4")
             self.thread_pool.submit(self.download_with_progress, args)
 
             item = DownloadListItem(f"{request.video_number}. {request.video.title}")
@@ -269,7 +273,7 @@ class DownloadViewer(QWidget):
         :return: None
         """
         print(f"Beginning to download {ars.video.title}.")
-        output_location = os.path.join(ars.output_path, ars.filename)
+        temp_output_loc = os.path.join(ars.output_path, ars.filename)
         ns_update_interval: int = ars.update_interval * 1000000
         is_paused = False
         canceled = False
@@ -287,7 +291,7 @@ class DownloadViewer(QWidget):
                 stream = StreamQuery(ars.video.fmt_streams).filter(
                     mime_type="video/mp4", adaptive=True).order_by("resolution").desc().first()
 
-            with open(output_location, 'wb') as file:
+            with open(temp_output_loc, 'wb') as file:
                 stream_chunks = pytube.streams.request.stream(stream.url)
                 filesize: int = stream.filesize
                 downloaded: int = 0
@@ -330,6 +334,12 @@ class DownloadViewer(QWidget):
                     else:
                         time.sleep(ars.update_interval / 1000)
 
+            remux_to_audio(ars.output_path, temp_output_loc, self.convert_to_file_name(f"{ars.video.title} - {ars.video.author}"),
+                           DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
+
+            os.remove(temp_output_loc)
+
+
         except Exception as exception:
             self.output_queue.put({
                 "type": "error",
@@ -338,6 +348,8 @@ class DownloadViewer(QWidget):
             })
             print(exception)
             canceled = True
+            if os.path.exists(temp_output_loc):
+                os.remove(temp_output_loc)
 
         finally:
             try:
@@ -347,8 +359,8 @@ class DownloadViewer(QWidget):
                         "value": "canceled",
                         "uuid": ars.filename
                     })
-                    if os.path.exists(output_location):
-                        os.remove(output_location)
+                    if os.path.exists(temp_output_loc):
+                        os.remove(temp_output_loc)
 
             except Exception as exception:
                 self.output_queue.put({
@@ -363,4 +375,35 @@ class DownloadViewer(QWidget):
                     "type": "update",
                     "value": "thread finished",
                     "uuid": ars.filename
-                    })
+                })
+
+
+def remux_to_audio(output_folder: str, file_path: str, output_name: str, ffmpeg_loc: str, max_attempts: int = 5, current_attempt: int = 0):
+    if current_attempt >= max_attempts:
+        raise FileExistsError(f"Unable to remux '{output_name}'. "
+                          f"Make sure there aren't duplicate files with the same name.")
+    try:
+        if current_attempt == 0:
+            file_name = f"{output_name}.m4a"
+        else:
+            file_name = f"{output_name} ({current_attempt}).m4a"
+
+        if os.path.exists(os.path.join(output_folder, file_name)):
+            if current_attempt >= max_attempts:
+                raise FileExistsError(f"Unable to remux '{output_name}'. "
+                                      f"Make sure there aren't duplicate files with the same name.")
+            else:
+                remux_to_audio(output_folder, file_path, output_name, ffmpeg_loc, max_attempts, current_attempt + 1)
+                return
+
+        fpeg = (
+            ffmpeg.FFmpeg(ffmpeg_loc).option("y").input(file_path).output(
+                os.path.join(output_folder, file_name),
+                codec="copy"
+            )
+        )
+
+        print(fpeg.execute())
+
+    except FFmpegError as err:
+        raise err

@@ -3,13 +3,13 @@ from typing import List
 
 import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
-    QVBoxLayout, QFileDialog, QHBoxLayout, QWidget, QStackedWidget, QFormLayout
+    QFileDialog, QHBoxLayout, QWidget, QStackedWidget, QFormLayout
 from pytube import YouTube
 
+from AppDataHandler import DataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
 from DownloadHandler import DownloadViewer, DownloadRequest
 from StreamViewer import StreamViewer
-from AppDataHandler import DataHandler
 
 
 class MainWindow(QMainWindow):
@@ -196,6 +196,12 @@ class HomeWindow(QWidget):
             return f"Invalid folder path '{self.selectedFolder.text()}'."
 
         print("Completed folder validation.")
+
+        if not path.exists(self.selectedFile.text()):
+            return (f"Invalid file path '{self.selectedFile.text()}'.\n"
+                    f"Make sure you select a valid ffmpeg executable.")
+
+
 
         # Check if video/playlist exists.
         try:
