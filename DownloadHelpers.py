@@ -378,7 +378,7 @@ def get_metadata_mp4(video: YouTube):
     """
     text = get_description(video)
     print(text)
-    if text is not None:
+    if text is not None or False:
         lines = text.split('\n')
     else:
         lines = [""]
