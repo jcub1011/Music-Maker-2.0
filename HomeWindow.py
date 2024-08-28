@@ -250,8 +250,14 @@ class HomeWindow(QWidget):
             return
 
         # Truncate list.
+        max_downloads: int
+        if len(videos) < self.max_downloads.get_value():
+            max_downloads = len(videos)
+        else:
+            max_downloads = self.max_downloads.get_value()
+
         if self.max_downloads.get_value() > 0:
-            videos = videos[:self.max_downloads.get_value()]
+            videos = videos[:max_downloads]
 
         for callback in self.on_get_streams_callbacks:
             callback(videos, self.selectedFolder.text())
