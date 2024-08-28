@@ -2,23 +2,15 @@ import os
 import threading
 import time
 import traceback
-import urllib.request
-from io import BytesIO
-from urllib.request import urlopen
-
-import requests
-import urllib3
-from PIL import Image
+from enum import Enum
 from multiprocessing.queues import Queue
 from typing import NamedTuple, Final
-from multiprocessing import Manager
-from enum import Enum
+from urllib.request import urlopen
 
 import pytube
-from ffmpeg import ffmpeg, FFmpegError
+from ffmpeg import ffmpeg
 from mutagen.mp4 import MP4Cover, MP4
 from pytube import Stream, StreamQuery, YouTube
-from requests import request
 
 from AppDataHandler import DataHandler
 
@@ -236,20 +228,23 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
                 )
                 mpeg.execute()
                 add_metadata_mp4(remux_output_file, metadata)
+                ars.output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="completed processing",
+                    uuid=ars.uuid
+                ))
 
         except:
             print(traceback.format_exc())
+            ars.output_queue.put(DownloadProgressMessage(
+                type="event",
+                value="error",
+                uuid=ars.uuid
+            ))
 
             # Cleanup.
             if os.path.exists(remux_output_file):
                 os.remove(remux_output_file)
-
-        finally:
-            ars.output_queue.put(DownloadProgressMessage(
-                type="event",
-                value="completed processing",
-                uuid=ars.uuid
-            ))
 
     except:
         print(traceback.print_exc())
@@ -316,7 +311,7 @@ def download_stream_with_progress(stream: Stream, output_file: str, output_queue
 
                     output_queue.put(DownloadProgressMessage(
                         type="progress",
-                        value=int(downloaded / file_size * 100),
+                        value=int(downloaded / file_size * 95),
                         uuid=uuid
                     ))
 

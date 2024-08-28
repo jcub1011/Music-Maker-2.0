@@ -1,22 +1,12 @@
-import os
 import queue
-import subprocess
 import threading
-import time
-import traceback
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import NamedTuple, List
 from uuid import uuid4
-from subprocess import CREATE_NO_WINDOW
 
-import ffmpeg
-import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
-from ffmpeg import FFmpegError
-from mutagen import Metadata
-from mutagen.mp4 import MP4
-from pytube import YouTube, StreamQuery
+from pytube import YouTube
 
 import DownloadHelpers
 from AppDataHandler import DataHandler
@@ -142,6 +132,19 @@ class DownloadViewer(QWidget):
                     print("Shutting down thread pool.")
                     if self.thread_pool is not None:
                         self.thread_pool.shutdown()
+            elif message.value == "thread started":
+                self.uuid_list_item_map[message.uuid].update_status("Ready")
+            elif message.value == "started download":
+                self.uuid_list_item_map[message.uuid].update_status("Downloading")
+            elif message.value == "started processing":
+                self.uuid_list_item_map[message.uuid].update_status("Processing")
+            elif message.value == "completed processing":
+                self.uuid_list_item_map[message.uuid].update_status("Finished")
+                self.uuid_list_item_map[message.uuid].update_progress(100)
+            elif message.value == "canceled":
+                self.uuid_list_item_map[message.uuid].update_status("Canceled")
+            elif message.value == "error":
+                self.uuid_list_item_map[message.uuid].update_status("Encountered Error")
 
         elif message.type == "progress":
             self.uuid_list_item_map[message.uuid].update_progress(message.value)

@@ -43,6 +43,7 @@ class StreamViewer(QWidget):
         audio_only_initial_state = AppDataHandler.DataHandler.get_config_file_info()[AppDataHandler.DataHandler.audio_only_key]
         if audio_only_initial_state is not None:
             self.audio_only_toggle.check_box.setChecked(audio_only_initial_state)
+        self.audio_only_toggle.setDisabled(True)
 
         self.audio_only_toggle.check_box.stateChanged.connect( lambda:
             AppDataHandler.DataHandler.update_config_file(

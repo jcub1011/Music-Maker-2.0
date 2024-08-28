@@ -104,6 +104,7 @@ class HomeWindow(QWidget):
         # Footer selectors.
         self.simultaneousDownloads = LabeledSpinbox("Simultaneous\nDownloads")
         self.simultaneousProcesses = LabeledSpinbox("Simultaneous\nProcesses")
+        self.simultaneousProcesses.setDisabled(True)
         self.max_downloads = LabeledSpinbox("Max Downloads\n(0 = unlimited)", 0)
 
         # Layout
