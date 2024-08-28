@@ -2,6 +2,14 @@ import os
 import threading
 import time
 import traceback
+import urllib.request
+from io import BytesIO
+from urllib.request import urlopen
+
+import requests
+import urllib3
+from PIL import Image
+from multiprocessing.queues import Queue
 from typing import NamedTuple, Final
 from multiprocessing import Manager
 from enum import Enum
@@ -9,7 +17,8 @@ from enum import Enum
 import pytube
 from ffmpeg import ffmpeg, FFmpegError
 from mutagen.mp4 import MP4Cover, MP4
-from pytube import Stream, StreamQuery
+from pytube import Stream, StreamQuery, YouTube
+from requests import request
 
 from AppDataHandler import DataHandler
 
@@ -19,44 +28,13 @@ class Metadata(NamedTuple):
     author: str
     album: str
     year: str
-    cover: MP4Cover
+    cover_url: str
 
 
 class DownloadErrorCode(Enum):
     NONE = 0
     ERROR = 1
     CANCELED = 2
-
-
-class DownloadRequestArgs(NamedTuple):
-    """
-    Attributes
-    ----------
-    message_check_frequency : int
-        In milliseconds.
-    output_queue : Manager.Queue
-        Queue to send progress and update messages to.
-    output_folder : str
-        Folder to put downloaded files in.
-    audio_only : bool
-        True if you want to download the audio only, otherwise it will download audio and video.
-    metadata : Metadata
-        The metadata to apply to the downloaded file.
-    stop_event : threading.Event
-        The flag to listen to for stop requests.
-    streams : list[Stream]
-        The fmt_streams from a YouTube object.
-    uuid : str
-        Identifier for the download request.
-    """
-    message_check_frequency: int
-    output_queue: Manager.Queue
-    output_folder: str
-    audio_only: bool
-    metadata: Metadata
-    stop_event: threading.Event
-    streams: list[Stream]
-    uuid: str
 
 
 class DownloadProgressMessage(NamedTuple):
@@ -74,6 +52,34 @@ class DownloadProgressMessage(NamedTuple):
     type: str
     value: [str, int]
     uuid: str
+
+
+class DownloadRequestArgs(NamedTuple):
+    """
+    Attributes
+    ----------
+    message_check_frequency : int
+        In milliseconds.
+    output_queue : Manager.Queue
+        Queue that DownloadProgressMessages are sent to.
+    output_folder : str
+        Folder to put downloaded files in.
+    audio_only : bool
+        True if you want to download the audio only, otherwise it will download audio and video.
+    video : YouTube
+        The video to download.
+    stop_event : threading.Event
+        The flag to listen to for stop requests.
+    uuid : str
+        Identifier for the download request.
+    """
+    message_check_frequency: int
+    output_queue: Queue
+    output_folder: str
+    audio_only: bool
+    stop_event: threading.Event
+    uuid: str
+    video: YouTube
 
 
 def convert_to_file_name(name: str):
@@ -106,19 +112,20 @@ def convert_to_file_name(name: str):
     return cleaned_name
 
 
-def download_with_progress(self, ars: DownloadRequestArgs) -> None:
+def download_with_progress(ars: DownloadRequestArgs) -> None:
     """
     Attempts to download a YouTube video with the ability to send progress reports and receive pause/cancel requests.
     :return: None
     """
-    print(f"Beginning to download {ars.metadata.title}.")
+    print(f"Beginning to download {ars.video.title}.")
     ars.output_queue.put(DownloadProgressMessage(
         type="event",
         value="thread started",
         uuid=ars.uuid
     ))
 
-    file_system_safe_name: str = convert_to_file_name(f"{ars.metadata.title} - {ars.metadata.author}")
+    metadata = get_metadata_mp4(ars.video)
+    file_system_safe_name: str = convert_to_file_name(f"{metadata.title} - {metadata.author}")
     temporary_file_path_a: str = os.path.join(ars.output_folder, f"{ars.uuid}-a.mp4")
     temporary_file_path_v: str = os.path.join(ars.output_folder, f"{ars.uuid}-v.mp4")
     update_interval_ns: int = ars.message_check_frequency * 1000000
@@ -131,9 +138,9 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
             return
 
         # Get streams.
-        audio_stream = StreamQuery(ars.streams).get_audio_only()
+        audio_stream = StreamQuery(ars.video.fmt_streams).get_audio_only()
         if not ars.audio_only:
-            video_stream = StreamQuery(ars.streams).filter(
+            video_stream = StreamQuery(ars.video.fmt_streams).filter(
                 mime_type="video/mp4", adaptive=True).order_by("resolution").desc().first()
         else:
             video_stream = None
@@ -144,10 +151,10 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
             value="started download",
             uuid=ars.uuid
         ))
-        if temporary_file_path_a:
+        if temporary_file_path_a and audio_stream:
             download_stream_with_progress(audio_stream, temporary_file_path_a, ars.output_queue, ars.uuid,
                                           ars.stop_event, update_interval_ns)
-        if temporary_file_path_v:
+        if temporary_file_path_v and video_stream:
             download_stream_with_progress(video_stream, temporary_file_path_v, ars.output_queue, ars.uuid,
                                           ars.stop_event, update_interval_ns)
         ars.output_queue.put(DownloadProgressMessage(
@@ -174,11 +181,12 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
 
         # Get valid location.
         while os.path.exists(remux_output_file):
+            attempts += 1
             if attempts >= MAX_ATTEMPTS:
                 raise FileExistsError(f"Too many files with the name '{file_system_safe_name + extension}'.")
             else:
                 remux_output_file: str = os.path.join(ars.output_folder,
-                                                      f"{file_system_safe_name}({str(attempts)}){extension}")
+                                                      f"{file_system_safe_name} ({str(attempts)}){extension}")
 
         try:
             # Attempt to process downloads.
@@ -191,7 +199,7 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
                     )
                 )
                 mpeg.execute()
-                add_metadata_mp4(remux_output_file, ars.metadata)
+                add_metadata_mp4(remux_output_file, metadata)
 
         except:
             print(traceback.format_exc())
@@ -224,7 +232,7 @@ def download_with_progress(self, ars: DownloadRequestArgs) -> None:
         ))
 
 
-def download_stream_with_progress(stream: Stream, output_file: str, output_queue: Manager.Queue, uuid: str,
+def download_stream_with_progress(stream: Stream, output_file: str, output_queue: Queue, uuid: str,
                                   stop_event: threading.Event, update_interval: int) -> DownloadErrorCode:
     """
     Downloads the provided stream at the provided file location.
@@ -249,6 +257,11 @@ def download_stream_with_progress(stream: Stream, output_file: str, output_queue
             output_queue.put(DownloadProgressMessage(
                 type="event",
                 value="started stream",
+                uuid=uuid
+            ))
+            output_queue.put(DownloadProgressMessage(
+                type="progress",
+                value=0,
                 uuid=uuid
             ))
 
@@ -297,9 +310,60 @@ def add_metadata_mp4(file_path: str, metadata: Metadata):
     tags["\xa9ART"] = metadata.author
     tags["\xa9alb"] = metadata.album
     tags["\xa9day"] = metadata.year
-    tags["covr"] = metadata.cover
+
+    http_req = urlopen(metadata.cover_url)
+    file = http_req.read()
+    http_req.close()
+    tags["covr"] = [MP4Cover(file, imageformat=MP4Cover.FORMAT_JPEG)]
 
     tags.save()
 
 
+def get_metadata_mp4(video: YouTube):
+    """
+    Attempts to scrape relevant metadata from the provided video.
+    :param video:
+    :return:
+    """
+    text = video.description
+    if text is not None:
+        lines = text.split('\n')
+    else:
+        lines = [""]
 
+    # Checks if the description was generated by YouTube.
+    if lines[-1] == "Auto-generated by YouTube.":
+        print("Description was auto generated.")
+
+        # Parse details.
+        title, artist = lines[2].split(' · ', 1)
+        album = lines[4]
+        year = ""
+
+        # Finds the release year if it exists.
+        for line in lines:
+            if line.find('Released on: ') != -1:
+                year = line.split(': ')[1].split('-', 1)[0]
+                break
+
+        # If the release year wasn't found.
+        if year == "":
+            year = str(video.publish_date.year)
+
+    else:
+        title = video.title
+        artist = video.author
+        year = str(video.publish_date.year)
+        album = ""
+
+
+    # Fix artist formatting.
+    artist = artist.replace(' · ', "; ")
+
+    return Metadata(
+        title=title,
+        author=artist,
+        album=album,
+        year=year,
+        cover_url=video.thumbnail_url
+    )

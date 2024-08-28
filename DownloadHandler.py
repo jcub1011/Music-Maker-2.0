@@ -14,11 +14,14 @@ import pytube
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
 from ffmpeg import FFmpegError
+from mutagen import Metadata
 from mutagen.mp4 import MP4
 from pytube import YouTube, StreamQuery
 
+import DownloadHelpers
 from AppDataHandler import DataHandler
 from CustomWidgets import DownloadListItem
+from DownloadHelpers import download_with_progress, DownloadRequestArgs
 
 
 class TagHandlerM4A:
@@ -218,13 +221,21 @@ class DownloadViewer(QWidget):
         progress_bar_list = []
         self.thread_pool = ThreadPoolExecutor(max_workers=thread_count)
         for request in download_list:
-            args = DownloadThreadArgs(request.video, self.output_queue, request.audio_only, request.output_path,
-                                      f"{uuid4()}.mp4")
-            self.thread_pool.submit(self.download_with_progress, args)
-
+            identifier = str(uuid4())
             item = DownloadListItem(f"{request.video_number}. {request.video.title}")
-            self.uuid_list_item_map[args.filename] = item
+            self.uuid_list_item_map[identifier] = item
             progress_bar_list.append(item)
+
+            args = DownloadRequestArgs(
+                message_check_frequency=100,
+                output_queue=self.output_queue,
+                output_folder=request.output_path,
+                audio_only=request.audio_only,
+                stop_event=self.stop_download_event,
+                uuid=identifier,
+                video=request.video
+            )
+            self.thread_pool.submit(download_with_progress, args)
 
         scroll_layout = QFormLayout()
         scroll_layout.setVerticalSpacing(0)
@@ -237,7 +248,7 @@ class DownloadViewer(QWidget):
 
     def check_for_messages(self):
         while not self.output_queue.empty():
-            self.on_message_received(self.output_queue.get())
+            self.on_progress_message_received(self.output_queue.get())
 
     def on_message_received(self, message: dict):
         print(f"Received message: {message}")
@@ -258,6 +269,26 @@ class DownloadViewer(QWidget):
 
         elif str.lower(message["type"]) == "progress":
             self.uuid_list_item_map[message["uuid"]].update_progress(message["value"])
+
+    def on_progress_message_received(self, message: DownloadHelpers.DownloadProgressMessage):
+        print(f"Received message: {message}")
+
+        if message.type == "event":
+            if message.value == "thread finished":
+                self.threads_finished += 1
+                print(f"Current completed thread count: {self.threads_finished}")
+
+                if self.threads_finished >= self.total_threads_to_finish:
+                    self.return_button.setDisabled(False)
+                    self.stop_button.setDisabled(True)
+                    self.message_check_timer.stop()
+
+                    print("Shutting down thread pool.")
+                    if self.thread_pool is not None:
+                        self.thread_pool.shutdown()
+
+        elif message.type == "progress":
+            self.uuid_list_item_map[message.uuid].update_progress(message.value)
 
     def download_with_progress(self, ars: DownloadThreadArgs) -> None:
         """
