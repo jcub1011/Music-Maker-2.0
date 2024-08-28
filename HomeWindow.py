@@ -8,7 +8,7 @@ from pytube import YouTube
 
 from AppDataHandler import DataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
-from DownloadHandler import DownloadViewer, DownloadRequest, TagHandlerM4A
+from DownloadHandler import DownloadViewer, DownloadRequest
 from StreamViewer import StreamViewer
 
 
