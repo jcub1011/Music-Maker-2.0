@@ -135,6 +135,11 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             raise NotImplementedError("Video download is currently unsupported.")
 
         if ars.stop_event.is_set():
+            ars.output_queue.put(DownloadProgressMessage(
+                type="event",
+                value="canceled",
+                uuid=ars.uuid
+            ))
             return
 
         # Get streams.
@@ -151,12 +156,43 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             value="started download",
             uuid=ars.uuid
         ))
+
         if temporary_file_path_a and audio_stream:
-            download_stream_with_progress(audio_stream, temporary_file_path_a, ars.output_queue, ars.uuid,
-                                          ars.stop_event, update_interval_ns)
+            error_code = download_stream_with_progress(audio_stream, temporary_file_path_a, ars.output_queue, ars.uuid,
+                                                       ars.stop_event, update_interval_ns)
+            if error_code == DownloadErrorCode.CANCELED:
+                ars.output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="canceled",
+                    uuid=ars.uuid
+                ))
+                return
+            if error_code == DownloadErrorCode.ERROR:
+                ars.output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="error",
+                    uuid=ars.uuid
+                ))
+                return
+
         if temporary_file_path_v and video_stream:
-            download_stream_with_progress(video_stream, temporary_file_path_v, ars.output_queue, ars.uuid,
-                                          ars.stop_event, update_interval_ns)
+            error_code = download_stream_with_progress(video_stream, temporary_file_path_v, ars.output_queue, ars.uuid,
+                                                       ars.stop_event, update_interval_ns)
+            if error_code == DownloadErrorCode.CANCELED:
+                ars.output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="canceled",
+                    uuid=ars.uuid
+                ))
+                return
+            if error_code == DownloadErrorCode.ERROR:
+                ars.output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="error",
+                    uuid=ars.uuid
+                ))
+                return
+
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
             value="completed download",
@@ -217,6 +253,11 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
 
     except:
         print(traceback.print_exc())
+        ars.output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="error",
+            uuid=ars.uuid
+        ))
 
     finally:
         # Delete temporary files.
