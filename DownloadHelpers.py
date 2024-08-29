@@ -6,6 +6,7 @@ from enum import Enum
 from multiprocessing.queues import Queue
 from typing import NamedTuple, Final
 from urllib.request import urlopen
+from tempfile import NamedTemporaryFile
 
 import pytube
 from ffmpeg import ffmpeg
@@ -117,9 +118,23 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
     ))
 
     metadata = get_metadata_mp4(ars.video)
+
+    # https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile
+    audio_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
+    audio_temp_file.close()
+    temporary_file_path_a: str = audio_temp_file.name
+    print(f"Writing temp audio data to '{temporary_file_path_a}'.")
+
+    if not ars.audio_only:
+        video_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
+        video_temp_file.close()
+        temporary_file_path_v: [str, None] = video_temp_file.name
+        print(f"Writing temp video data to '{temporary_file_path_v}'.")
+    else:
+        video_temp_file = None
+        temporary_file_path_v = None
+
     file_system_safe_name: str = convert_to_file_name(f"{metadata.title} - {metadata.author}")
-    temporary_file_path_a: str = os.path.join(ars.output_folder, f"{ars.uuid}-a.mp4")
-    temporary_file_path_v: str = os.path.join(ars.output_folder, f"{ars.uuid}-v.mp4")
     update_interval_ns: int = ars.message_check_frequency * 1000000
 
     try:
@@ -256,9 +271,9 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
 
     finally:
         # Delete temporary files.
-        if os.path.exists(temporary_file_path_a):
+        if temporary_file_path_a and os.path.exists(temporary_file_path_a):
             os.remove(temporary_file_path_a)
-        if os.path.exists(temporary_file_path_v):
+        if temporary_file_path_v and os.path.exists(temporary_file_path_v):
             os.remove(temporary_file_path_v)
 
         ars.output_queue.put(DownloadProgressMessage(
