@@ -90,9 +90,14 @@ class DownloadListItem(QWidget):
         self.label.setFixedHeight(16)
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(16)
+        self.statusLabel = QLabel("Waiting...")
+        self.statusLabel.setFixedHeight(16)
 
+        header = QHBoxLayout()
+        header.addWidget(self.label)
+        header.addWidget(self.statusLabel)
         layout = QVBoxLayout()
-        layout.addWidget(self.label)
+        layout.addLayout(header)
         layout.addWidget(self.progress_bar)
         self.setLayout(layout)
         self.setFixedHeight(32)
@@ -100,3 +105,6 @@ class DownloadListItem(QWidget):
 
     def update_progress(self, progress: int):
         self.progress_bar.setValue(progress)
+
+    def update_status(self, status: str):
+        self.statusLabel.setText(status)
