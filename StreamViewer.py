@@ -153,6 +153,7 @@ class StreamViewer(QWidget):
             if message["Stop Message"] == "Finished":
                 self.stream_list_view.selectAll()
                 self.begin_btn.setEnabled(True)
+                self.begin_btn.setFocus()
             return
 
         self.stream_id_youtube_map[message["ID"]] = message["YouTube"]

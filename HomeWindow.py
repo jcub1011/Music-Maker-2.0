@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
     def open_home(self):
         self.setWindowTitle("Music Maker 2.0 - Home")
         self.central_widget.setCurrentWidget(self.home)
+        self.home.getStreamsButton.setFocus()
 
     def open_downloads(self, download_list: List[DownloadRequest]):
         print("Opening download viewer.")
