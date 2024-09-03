@@ -1,12 +1,15 @@
 import os
+import subprocess
 import threading
 import time
 import traceback
 from enum import Enum
+from io import BytesIO
 from multiprocessing.queues import Queue
+from pathlib import Path
 from typing import NamedTuple, Final
 from urllib.request import urlopen
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, SpooledTemporaryFile
 
 import pytube
 from ffmpeg import ffmpeg
@@ -105,6 +108,71 @@ def convert_to_file_name(name: str):
     return cleaned_name
 
 
+def download_stream(stream: Stream, output_file: SpooledTemporaryFile, output_queue: Queue, uuid: str,
+                    stop_event: threading.Event, update_interval: int) -> DownloadErrorCode:
+    """
+    Downloads the provided stream at the provided file location.
+    :param update_interval: How often to check and receive messages and event flags. (nanoseconds)
+    :param stop_event: The stop flag to look for.
+    :param uuid: Download request uuid.
+    :param output_queue: Queue to send progress messages.
+    :param stream: The stream to download.
+    :param output_file: The location to store the download.
+    :return: None
+    """
+    try:
+        if stop_event.is_set():
+            return DownloadErrorCode.CANCELED
+        else:
+            time_of_last_update = time.monotonic_ns()
+
+        stream_chunks = pytube.streams.request.stream(stream.url)
+        file_size: int = stream.filesize
+        downloaded: float = 0.0
+        output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="started stream",
+            uuid=uuid
+        ))
+        output_queue.put(DownloadProgressMessage(
+            type="progress",
+            value=0,
+            uuid=uuid
+        ))
+
+        while True:
+            # Send and receive messages.
+            if time.monotonic_ns() - time_of_last_update > update_interval:
+                time_of_last_update = time.monotonic_ns()
+
+                if stop_event.is_set():
+                    return DownloadErrorCode.CANCELED
+
+                output_queue.put(DownloadProgressMessage(
+                    type="progress",
+                    value=int(downloaded / file_size * 95),
+                    uuid=uuid
+                ))
+
+            # Retrieve data.
+            chunk = next(stream_chunks, None)
+            if chunk:
+                output_file.write(chunk)
+                downloaded += len(chunk)
+            else:
+                output_queue.put(DownloadProgressMessage(
+                    type="event",
+                    value="completed stream",
+                    uuid=uuid
+                ))
+                return DownloadErrorCode.NONE
+
+    except Exception as exe:
+        print(traceback.format_exc())
+        return DownloadErrorCode.ERROR
+
+
+
 def download_with_progress(ars: DownloadRequestArgs) -> None:
     """
     Attempts to download a YouTube video with the ability to send progress reports and receive pause/cancel requests.
@@ -120,19 +188,12 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
     metadata = get_metadata_mp4(ars.video)
 
     # https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile
-    audio_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
-    audio_temp_file.close()
-    temporary_file_path_a: str = audio_temp_file.name
-    print(f"Writing temp audio data to '{temporary_file_path_a}'.")
+    audio_temp_file = SpooledTemporaryFile(max_size=25000000, mode='wb+', suffix=".mp4")
 
     if not ars.audio_only:
-        video_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
-        video_temp_file.close()
-        temporary_file_path_v: [str, None] = video_temp_file.name
-        print(f"Writing temp video data to '{temporary_file_path_v}'.")
+        video_temp_file = SpooledTemporaryFile(max_size=25000000, mode='wb+', suffix=".mp4")
     else:
         video_temp_file = None
-        temporary_file_path_v = None
 
     file_system_safe_name: str = convert_to_file_name(f"{metadata.title} - {metadata.author}")
     update_interval_ns: int = ars.message_check_frequency * 1000000
@@ -157,15 +218,16 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
         else:
             video_stream = None
 
-        # Download streams.
+        # Start stream downloads.
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
             value="started download",
             uuid=ars.uuid
         ))
 
-        if temporary_file_path_a and audio_stream:
-            error_code = download_stream_with_progress(audio_stream, temporary_file_path_a, ars.output_queue, ars.uuid,
+        # Get audio.
+        if audio_temp_file and audio_stream:
+            error_code = download_stream(audio_stream, audio_temp_file, ars.output_queue, ars.uuid,
                                                        ars.stop_event, update_interval_ns)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
@@ -182,8 +244,9 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
                 ))
                 return
 
-        if temporary_file_path_v and video_stream:
-            error_code = download_stream_with_progress(video_stream, temporary_file_path_v, ars.output_queue, ars.uuid,
+        # Get video.
+        if video_temp_file and video_stream:
+            error_code = download_stream(video_stream, video_temp_file, ars.output_queue, ars.uuid,
                                                        ars.stop_event, update_interval_ns)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
@@ -236,12 +299,14 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             if ars.audio_only:
                 mpeg = (
                     ffmpeg.FFmpeg(DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
-                    .option("y").input(temporary_file_path_a).output(
+                    .option("y").input("pipe:0").output(
                         remux_output_file,
                         codec="copy"
                     )
                 )
-                mpeg.execute()
+
+                audio_temp_file.seek(0)
+                mpeg.execute(stream=audio_temp_file.read())
                 add_metadata_mp4(remux_output_file, metadata)
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -271,10 +336,15 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
 
     finally:
         # Delete temporary files.
-        if temporary_file_path_a and os.path.exists(temporary_file_path_a):
-            os.remove(temporary_file_path_a)
-        if temporary_file_path_v and os.path.exists(temporary_file_path_v):
-            os.remove(temporary_file_path_v)
+        if audio_temp_file is not None:
+            audio_temp_file.close()
+        if video_temp_file is not None:
+            video_temp_file.close()
+
+        # if temporary_file_path_a and os.path.exists(temporary_file_path_a):
+        #     os.remove(temporary_file_path_a)
+        # if temporary_file_path_v and os.path.exists(temporary_file_path_v):
+        #     os.remove(temporary_file_path_v)
 
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
