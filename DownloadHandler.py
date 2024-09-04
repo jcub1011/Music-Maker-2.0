@@ -132,6 +132,8 @@ class DownloadViewer(QWidget):
                     print("Shutting down thread pool.")
                     if self.thread_pool is not None:
                         self.thread_pool.shutdown()
+            elif message.value == "finding streams":
+                self.uuid_list_item_map[message.uuid].update_status("Getting Streams")
             elif message.value == "thread started":
                 self.uuid_list_item_map[message.uuid].update_status("Ready")
             elif message.value == "started download":

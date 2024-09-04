@@ -1,16 +1,13 @@
 import os
 import threading
-import time
 import traceback
 from enum import Enum
 from multiprocessing.queues import Queue
 from tempfile import SpooledTemporaryFile
 from typing import NamedTuple, Final
-from urllib.request import urlopen
 
 import pytube
 from ffmpeg import ffmpeg
-from mutagen.mp4 import MP4Cover, MP4
 from pytube import Stream, StreamQuery, YouTube
 
 from AppDataHandler import DataHandler
@@ -99,26 +96,20 @@ def convert_to_file_name(name: str):
 
 
 def download_stream(stream: Stream, output_file: SpooledTemporaryFile, output_queue: Queue, uuid: str,
-                    stop_event: threading.Event, update_interval: int) -> DownloadErrorCode:
+                    stop_event: threading.Event) -> DownloadErrorCode:
     """
     Downloads the provided stream at the provided file location.
-    :param update_interval: How often to check and receive messages and event flags. (nanoseconds)
     :param stop_event: The stop flag to look for.
     :param uuid: Download request uuid.
     :param output_queue: Queue to send progress messages.
     :param stream: The stream to download.
     :param output_file: The location to store the download.
-    :return: None
+    :return: The error code.
     """
     try:
         if stop_event.is_set():
             return DownloadErrorCode.CANCELED
-        else:
-            time_of_last_update = time.monotonic_ns()
 
-        stream_chunks = pytube.streams.request.stream(stream.url)
-        file_size: int = stream.filesize
-        downloaded: float = 0.0
         output_queue.put(DownloadProgressMessage(
             type="event",
             value="started stream",
@@ -130,37 +121,33 @@ def download_stream(stream: Stream, output_file: SpooledTemporaryFile, output_qu
             uuid=uuid
         ))
 
-        while True:
-            # Send and receive messages.
-            if time.monotonic_ns() - time_of_last_update > update_interval:
-                time_of_last_update = time.monotonic_ns()
+        file_size: int = stream.filesize
+        downloaded: float = 0.0
 
-                if stop_event.is_set():
-                    return DownloadErrorCode.CANCELED
-
-                output_queue.put(DownloadProgressMessage(
-                    type="progress",
-                    value=int(downloaded / file_size * 95),
-                    uuid=uuid
-                ))
+        for chunk in pytube.streams.request.stream(stream.url):
+            if stop_event.is_set():
+                return DownloadErrorCode.CANCELED
 
             # Retrieve data.
-            chunk = next(stream_chunks, None)
-            if chunk:
-                output_file.write(chunk)
-                downloaded += len(chunk)
-            else:
-                output_queue.put(DownloadProgressMessage(
-                    type="event",
-                    value="completed stream",
-                    uuid=uuid
-                ))
-                return DownloadErrorCode.NONE
+            output_file.write(chunk)
+            downloaded += len(chunk)
+
+            output_queue.put(DownloadProgressMessage(
+                type="progress",
+                value=int(downloaded / file_size * 95),
+                uuid=uuid
+            ))
+
+        output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="completed stream",
+            uuid=uuid
+        ))
+        return DownloadErrorCode.NONE
 
     except Exception as exe:
         print(traceback.format_exc())
         return DownloadErrorCode.ERROR
-
 
 
 def download_with_progress(ars: DownloadRequestArgs) -> None:
@@ -186,9 +173,14 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
         video_temp_file = None
 
     file_system_safe_name: str = convert_to_file_name(f"{metadata.title} - {metadata.author}")
-    update_interval_ns: int = ars.message_check_frequency * 1000000
 
     try:
+        ars.output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="finding streams",
+            uuid=ars.uuid
+        ))
+
         if not ars.audio_only:
             raise NotImplementedError("Video download is currently unsupported.")
 
@@ -201,10 +193,9 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             return
 
         # Get streams.
-        audio_stream = StreamQuery(ars.video.fmt_streams).get_audio_only()
+        audio_stream = StreamQuery(ars.video.streams).get_audio_only()
         if not ars.audio_only:
-            video_stream = StreamQuery(ars.video.fmt_streams).filter(
-                mime_type="video/mp4", adaptive=True).order_by("resolution").desc().first()
+            video_stream = StreamQuery(ars.video.fmt_streams).get_highest_resolution()
         else:
             video_stream = None
 
@@ -218,7 +209,7 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
         # Get audio.
         if audio_temp_file and audio_stream:
             error_code = download_stream(audio_stream, audio_temp_file, ars.output_queue, ars.uuid,
-                                                       ars.stop_event, update_interval_ns)
+                                         ars.stop_event)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -237,7 +228,7 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
         # Get video.
         if video_temp_file and video_stream:
             error_code = download_stream(video_stream, video_temp_file, ars.output_queue, ars.uuid,
-                                                       ars.stop_event, update_interval_ns)
+                                         ars.stop_event)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -331,14 +322,8 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
         if video_temp_file is not None:
             video_temp_file.close()
 
-        # if temporary_file_path_a and os.path.exists(temporary_file_path_a):
-        #     os.remove(temporary_file_path_a)
-        # if temporary_file_path_v and os.path.exists(temporary_file_path_v):
-        #     os.remove(temporary_file_path_v)
-
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
             value="thread finished",
             uuid=ars.uuid
         ))
-
