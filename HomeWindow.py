@@ -236,9 +236,17 @@ class HomeWindow(QWidget):
         try:
             playlist = pytube.Playlist(self.urlInput.text())
             print(playlist.playlist_id)
+
+            #authenticated_videos = []
+
+            #for url in playlist.video_urls:
+                #authenticated_videos.append(YouTube(url, use_oauth=True, allow_oauth_cache=True))
+
             videos = playlist.videos
+            #videos = authenticated_videos
         except KeyError:
             videos = [pytube.YouTube(self.urlInput.text())]
+
         except:
             print(f"Unable to get video or playlist from url '{self.urlInput.text()}'.")
             return

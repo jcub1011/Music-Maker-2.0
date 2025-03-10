@@ -1,27 +1,17 @@
 import os
 import threading
-import time
 import traceback
 from enum import Enum
 from multiprocessing.queues import Queue
+from tempfile import SpooledTemporaryFile
 from typing import NamedTuple, Final
-from urllib.request import urlopen
-from tempfile import NamedTemporaryFile
 
 import pytube
 from ffmpeg import ffmpeg
-from mutagen.mp4 import MP4Cover, MP4
 from pytube import Stream, StreamQuery, YouTube
 
 from AppDataHandler import DataHandler
-
-
-class Metadata(NamedTuple):
-    title: str
-    author: str
-    album: str
-    year: str
-    cover_url: str
+from MetadataScraper import add_metadata_mp4, get_metadata_mp4
 
 
 class DownloadErrorCode(Enum):
@@ -105,6 +95,61 @@ def convert_to_file_name(name: str):
     return cleaned_name
 
 
+def download_stream(stream: Stream, output_file: SpooledTemporaryFile, output_queue: Queue, uuid: str,
+                    stop_event: threading.Event) -> DownloadErrorCode:
+    """
+    Downloads the provided stream at the provided file location.
+    :param stop_event: The stop flag to look for.
+    :param uuid: Download request uuid.
+    :param output_queue: Queue to send progress messages.
+    :param stream: The stream to download.
+    :param output_file: The location to store the download.
+    :return: The error code.
+    """
+    try:
+        if stop_event.is_set():
+            return DownloadErrorCode.CANCELED
+
+        output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="started stream",
+            uuid=uuid
+        ))
+        output_queue.put(DownloadProgressMessage(
+            type="progress",
+            value=0,
+            uuid=uuid
+        ))
+
+        file_size: int = stream.filesize
+        downloaded: float = 0.0
+
+        for chunk in pytube.streams.request.stream(stream.url):
+            if stop_event.is_set():
+                return DownloadErrorCode.CANCELED
+
+            # Retrieve data.
+            output_file.write(chunk)
+            downloaded += len(chunk)
+
+            output_queue.put(DownloadProgressMessage(
+                type="progress",
+                value=int(downloaded / file_size * 95),
+                uuid=uuid
+            ))
+
+        output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="completed stream",
+            uuid=uuid
+        ))
+        return DownloadErrorCode.NONE
+
+    except Exception as exe:
+        print(traceback.format_exc())
+        return DownloadErrorCode.ERROR
+
+
 def download_with_progress(ars: DownloadRequestArgs) -> None:
     """
     Attempts to download a YouTube video with the ability to send progress reports and receive pause/cancel requests.
@@ -120,24 +165,22 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
     metadata = get_metadata_mp4(ars.video)
 
     # https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile
-    audio_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
-    audio_temp_file.close()
-    temporary_file_path_a: str = audio_temp_file.name
-    print(f"Writing temp audio data to '{temporary_file_path_a}'.")
+    audio_temp_file = SpooledTemporaryFile(max_size=25000000, mode='wb+', suffix=".mp4")
 
     if not ars.audio_only:
-        video_temp_file = NamedTemporaryFile('wb', suffix=".mp4", delete_on_close=False)
-        video_temp_file.close()
-        temporary_file_path_v: [str, None] = video_temp_file.name
-        print(f"Writing temp video data to '{temporary_file_path_v}'.")
+        video_temp_file = SpooledTemporaryFile(max_size=25000000, mode='wb+', suffix=".mp4")
     else:
         video_temp_file = None
-        temporary_file_path_v = None
 
     file_system_safe_name: str = convert_to_file_name(f"{metadata.title} - {metadata.author}")
-    update_interval_ns: int = ars.message_check_frequency * 1000000
 
     try:
+        ars.output_queue.put(DownloadProgressMessage(
+            type="event",
+            value="finding streams",
+            uuid=ars.uuid
+        ))
+
         if not ars.audio_only:
             raise NotImplementedError("Video download is currently unsupported.")
 
@@ -150,23 +193,23 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             return
 
         # Get streams.
-        audio_stream = StreamQuery(ars.video.fmt_streams).get_audio_only()
+        audio_stream = StreamQuery(ars.video.streams).get_audio_only()
         if not ars.audio_only:
-            video_stream = StreamQuery(ars.video.fmt_streams).filter(
-                mime_type="video/mp4", adaptive=True).order_by("resolution").desc().first()
+            video_stream = StreamQuery(ars.video.fmt_streams).get_highest_resolution()
         else:
             video_stream = None
 
-        # Download streams.
+        # Start stream downloads.
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
             value="started download",
             uuid=ars.uuid
         ))
 
-        if temporary_file_path_a and audio_stream:
-            error_code = download_stream_with_progress(audio_stream, temporary_file_path_a, ars.output_queue, ars.uuid,
-                                                       ars.stop_event, update_interval_ns)
+        # Get audio.
+        if audio_temp_file and audio_stream:
+            error_code = download_stream(audio_stream, audio_temp_file, ars.output_queue, ars.uuid,
+                                         ars.stop_event)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -182,9 +225,10 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
                 ))
                 return
 
-        if temporary_file_path_v and video_stream:
-            error_code = download_stream_with_progress(video_stream, temporary_file_path_v, ars.output_queue, ars.uuid,
-                                                       ars.stop_event, update_interval_ns)
+        # Get video.
+        if video_temp_file and video_stream:
+            error_code = download_stream(video_stream, video_temp_file, ars.output_queue, ars.uuid,
+                                         ars.stop_event)
             if error_code == DownloadErrorCode.CANCELED:
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -236,12 +280,14 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
             if ars.audio_only:
                 mpeg = (
                     ffmpeg.FFmpeg(DataHandler.get_config_file_info()[DataHandler.ffmpeg_key])
-                    .option("y").input(temporary_file_path_a).output(
+                    .option("y").input("pipe:0").output(
                         remux_output_file,
                         codec="copy"
                     )
                 )
-                mpeg.execute()
+
+                audio_temp_file.seek(0)
+                mpeg.execute(stream=audio_temp_file.read())
                 add_metadata_mp4(remux_output_file, metadata)
                 ars.output_queue.put(DownloadProgressMessage(
                     type="event",
@@ -271,170 +317,13 @@ def download_with_progress(ars: DownloadRequestArgs) -> None:
 
     finally:
         # Delete temporary files.
-        if temporary_file_path_a and os.path.exists(temporary_file_path_a):
-            os.remove(temporary_file_path_a)
-        if temporary_file_path_v and os.path.exists(temporary_file_path_v):
-            os.remove(temporary_file_path_v)
+        if audio_temp_file is not None:
+            audio_temp_file.close()
+        if video_temp_file is not None:
+            video_temp_file.close()
 
         ars.output_queue.put(DownloadProgressMessage(
             type="event",
             value="thread finished",
             uuid=ars.uuid
         ))
-
-
-def download_stream_with_progress(stream: Stream, output_file: str, output_queue: Queue, uuid: str,
-                                  stop_event: threading.Event, update_interval: int) -> DownloadErrorCode:
-    """
-    Downloads the provided stream at the provided file location.
-    :param update_interval: How often to check and receive messages and event flags. (nanoseconds)
-    :param stop_event: The stop flag to look for.
-    :param uuid: Download request uuid.
-    :param output_queue: Queue to send progress messages.
-    :param stream: The stream to download.
-    :param output_file: The location to store the download.
-    :return: None
-    """
-    try:
-        if stop_event.is_set():
-            return DownloadErrorCode.CANCELED
-        else:
-            time_of_last_update = time.monotonic_ns()
-
-        with open(output_file, 'wb') as file:
-            stream_chunks = pytube.streams.request.stream(stream.url)
-            file_size: int = stream.filesize
-            downloaded: float = 0.0
-            output_queue.put(DownloadProgressMessage(
-                type="event",
-                value="started stream",
-                uuid=uuid
-            ))
-            output_queue.put(DownloadProgressMessage(
-                type="progress",
-                value=0,
-                uuid=uuid
-            ))
-
-            while True:
-                # Send and receive messages.
-                if time.monotonic_ns() - time_of_last_update > update_interval:
-                    time_of_last_update = time.monotonic_ns()
-
-                    if stop_event.is_set():
-                        return DownloadErrorCode.CANCELED
-
-                    output_queue.put(DownloadProgressMessage(
-                        type="progress",
-                        value=int(downloaded / file_size * 95),
-                        uuid=uuid
-                    ))
-
-                # Retrieve data.
-                chunk = next(stream_chunks, None)
-                if chunk:
-                    file.write(chunk)
-                    downloaded += len(chunk)
-                else:
-                    output_queue.put(DownloadProgressMessage(
-                        type="event",
-                        value="completed stream",
-                        uuid=uuid
-                    ))
-                    return DownloadErrorCode.NONE
-
-    except Exception as exe:
-        print(traceback.format_exc())
-        return DownloadErrorCode.ERROR
-
-
-def add_metadata_mp4(file_path: str, metadata: Metadata):
-    """
-    Embeds the metadata to the provided mp4/m4a file.
-    :param file_path: Path to the file.
-    :param metadata: Metadata to embed.
-    :return: None
-    """
-    tags = MP4(file_path)
-
-    tags["\xa9nam"] = metadata.title
-    tags["\xa9ART"] = metadata.author
-    tags["\xa9alb"] = metadata.album
-    tags["\xa9day"] = metadata.year
-
-    http_req = urlopen(metadata.cover_url)
-    file = http_req.read()
-    http_req.close()
-    tags["covr"] = [MP4Cover(file, imageformat=MP4Cover.FORMAT_JPEG)]
-
-    tags.save()
-
-
-def get_description(yt: YouTube):
-    """
-    Thanks https://github.com/pytube/pytube/issues/1626#issuecomment-1775501965
-    :param yt:
-    :return:
-    """
-    for n in range(6):
-        try:
-            description =  yt.initial_data["engagementPanels"][n]["engagementPanelSectionListRenderer"]["content"]["structuredDescriptionContentRenderer"]["items"][1]["expandableVideoDescriptionBodyRenderer"]["attributedDescriptionBodyText"]["content"]
-            return description
-        except:
-            continue
-    return False
-
-
-def get_metadata_mp4(video: YouTube):
-    """
-    Attempts to scrape relevant metadata from the provided video.
-    :param video:
-    :return:
-    """
-    text = get_description(video)
-    print(text)
-    if text is not None or False:
-        lines = text.split('\n')
-    else:
-        lines = [""]
-
-    print("Parsed Description:", lines)
-
-    # Checks if the description was generated by YouTube.
-    if lines[-1].find("Auto-generated by YouTube.") != -1:
-        print("Description was auto generated.")
-
-        # Parse details.
-        title, artist = lines[2].split(' · ', 1)
-        album = lines[4]
-        year = ""
-
-        # Finds the release year if it exists.
-        for line in lines:
-            if line.find('Released on: ') != -1:
-                year = line.split(': ')[1].split('-', 1)[0]
-                break
-
-        # If the release year wasn't found.
-        if year == "":
-            year = str(video.publish_date.year)
-
-    else:
-        title = video.title
-        artist = video.author
-        year = str(video.publish_date.year)
-        album = ""
-
-
-    # Fix artist formatting.
-    artist = artist.replace(' · ', "; ")
-
-    meta = Metadata(
-        title=title,
-        author=artist,
-        album=album,
-        year=year,
-        cover_url=video.thumbnail_url
-    )
-    print("Detected metadata:", meta)
-    return meta
