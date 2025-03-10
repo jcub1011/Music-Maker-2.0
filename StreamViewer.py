@@ -99,6 +99,10 @@ class StreamViewer(QWidget):
         for callback in self.on_cancel_callback:
             callback()
 
+    def on_start_download_ytdlp(self):
+        print("Beginning tydlp downloads.")
+        download_list: List[DownloadRequest] = []
+
     def on_start_downloads(self):
         print("Beginning downloads.")
 

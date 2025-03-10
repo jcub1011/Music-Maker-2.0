@@ -95,6 +95,10 @@ def convert_to_file_name(name: str):
     return cleaned_name
 
 
+def download_stream(link: str):
+    print(f"Downloading {link}.")
+
+
 def download_stream(stream: Stream, output_file: SpooledTemporaryFile, output_queue: Queue, uuid: str,
                     stop_event: threading.Event) -> DownloadErrorCode:
     """

@@ -8,10 +8,15 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QScrollArea, QFormLayout
 from pytube import YouTube
 
+import yt_dlp.YoutubeDL
 import DownloadHelpers
 from AppDataHandler import DataHandler
 from CustomWidgets import DownloadListItem
 from DownloadHelpers import download_with_progress, DownloadRequestArgs
+
+
+class DownloadRequest_YTDLP(NamedTuple):
+    help: str
 
 
 class DownloadRequest(NamedTuple):

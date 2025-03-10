@@ -5,6 +5,7 @@ import pytube
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QLineEdit, \
     QFileDialog, QHBoxLayout, QWidget, QStackedWidget, QFormLayout
 from pytube import YouTube
+import yt_dlp
 
 from AppDataHandler import DataHandler
 from CustomWidgets import LabeledSpinbox, ErrorDialog
@@ -234,21 +235,16 @@ class HomeWindow(QWidget):
 
     def raise_get_streams_callback(self):
         try:
-            playlist = pytube.Playlist(self.urlInput.text())
-            print(playlist.playlist_id)
+            with yt_dlp.YoutubeDL({"ignoreerrors": True, "quiet": True}) as ydl:
+                playlist_dict = ydl.extract_info(self.urlInput.text(), download=False)
+                print(playlist_dict.get("title"))
 
-            #authenticated_videos = []
+            video_metadata = []
+            for video in playlist_dict["entries"]:
+                video_metadata.append(video)
 
-            #for url in playlist.video_urls:
-                #authenticated_videos.append(YouTube(url, use_oauth=True, allow_oauth_cache=True))
-
-            videos = playlist.videos
-            #videos = authenticated_videos
-        except KeyError:
-            videos = [pytube.YouTube(self.urlInput.text())]
-
-        except:
-            print(f"Unable to get video or playlist from url '{self.urlInput.text()}'.")
+        except Exception as e:
+            print(f"Unable to get video or playlist from url '{self.urlInput.text()}'.\nRecieved error {e}")
             return
 
         # Truncate list.
